@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -55,11 +56,22 @@ public class ServerConnectionChannel : IDisposable
     {
         if (this.socket == null)
         {
-            this.socket = new SocketIOClient.SocketIO(this.ServerUrl, new SocketIOOptions
+            var socketOptions = new SocketIOOptions
             {
                 Auth = new Dictionary<string, string>() { { "token", this.Token } },
                 Reconnection = true,
-            });
+            };
+
+            var serverUrl = this.ServerUrl;
+            // https://regex101.com/r/u8QBnU/2
+            var pathMatch = Regex.Match(this.ServerUrl, @"(.+\/\/.[^\/]+)(.*)");
+            if (pathMatch.Success && pathMatch.Groups.Count > 2)
+            {
+                serverUrl = pathMatch.Groups[1].Value;
+                socketOptions.Path = pathMatch.Groups[2].Value;
+            }
+
+            this.socket = new SocketIOClient.SocketIO(serverUrl, socketOptions);
             var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
             {
                 IncludeFields = true,

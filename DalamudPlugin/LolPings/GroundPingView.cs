@@ -6,7 +6,6 @@ using LolPings.Input;
 using LolPings.Log;
 using LolPings.UI.Util;
 using LolPings.UI.View;
-using Pictomancy;
 using System;
 using System.Numerics;
 using System.Reactive.Subjects;
@@ -29,6 +28,7 @@ public unsafe class GroundPingView : IPluginUIView
     private readonly Lazy<GroundPingPresenter> presenter;
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly IClientState clientState;
+    private readonly IGameGui gameGui;
     private readonly ITextureProvider textureProvider;
     private readonly IKeyState keyState;
     private readonly InputEventSource inputEventSource;
@@ -42,6 +42,7 @@ public unsafe class GroundPingView : IPluginUIView
         Lazy<GroundPingPresenter> presenter,
         IDalamudPluginInterface pluginInterface,
         IClientState clientState,
+        IGameGui gameGui,
         ITextureProvider textureProvider,
         IKeyState keyState,
         InputEventSource inputEventSource,
@@ -51,6 +52,7 @@ public unsafe class GroundPingView : IPluginUIView
         this.presenter = presenter;
         this.pluginInterface = pluginInterface;
         this.clientState = clientState;
+        this.gameGui = gameGui;
         this.textureProvider = textureProvider;
         this.keyState = keyState;
         this.inputEventSource = inputEventSource;
@@ -92,7 +94,7 @@ public unsafe class GroundPingView : IPluginUIView
             {
                 if (createPingOnLeftMouseUp && leftMouseUpThisFrame)
                 {
-                    if (PictoService.GameGui.ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
+                    if (this.gameGui.ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
                     {
                         this.logger.Debug("Clicked on world position {0} for ground ping", worldPos);
                         var ping = new GroundPing
@@ -124,7 +126,7 @@ public unsafe class GroundPingView : IPluginUIView
                     continue;
                 }
 
-                if (PictoService.GameGui.WorldToScreen(p.WorldPosition, out var screenPos))
+                if (this.gameGui.WorldToScreen(p.WorldPosition, out var screenPos))
                 {
                     //this.logger.Info("Processing ping {0}. ScreenPos {1}", i, screenPos);
                     if (!DrawQuestionMarkPing(ImGui.GetForegroundDrawList(), screenPos, new(250, 250), p.DrawDuration, p.Author))

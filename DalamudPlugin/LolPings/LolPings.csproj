@@ -43,8 +43,4 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\ffxiv_pictomancy\Pictomancy\Pictomancy.csproj" />
-  </ItemGroup>
 </Project>

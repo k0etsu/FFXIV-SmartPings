@@ -7,7 +7,6 @@ using LolPings.Log;
 using LolPings.Ninject;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using Pictomancy;
 
 namespace LolPings;
 
@@ -37,7 +36,7 @@ public sealed class PluginInitializer : IDalamudPlugin
     public PluginInitializer()
     {
         // Services
-        PictoService.Initialize(PluginInterface);
+        //PictoService.Initialize(PluginInterface);
 
         this.kernel = new StandardKernel(new PluginModule(), new FuncModule());
 
@@ -50,7 +49,7 @@ public sealed class PluginInitializer : IDalamudPlugin
 
     public void Dispose()
     {
-        PictoService.Dispose();
+        //PictoService.Dispose();
         TaskScheduler.UnobservedTaskException -= OnUnobservedTaskException;
         this.kernel.Dispose();
     }
