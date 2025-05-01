@@ -1,0 +1,16 @@
+{
+  "Author": "Ricimon",
+  "Name": "carPingus",
+  "Punchline":  "",
+  "Description": "Send other players ground pings and UI information. [IN DEVELOPMENT]",
+  "RepoUrl": "https://github.com/Ricimon/FFXIV-carPingus",
+  "IconUrl": "https://raw.githubusercontent.com/Ricimon/FFXIV-carPingus/main/images/icon.png",
+  "InternalName": "carPingus",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "lol",
+    "ping",
+    "pings",
+    "carpingus"
+  ]
+}
