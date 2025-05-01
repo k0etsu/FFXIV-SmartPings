@@ -6,7 +6,6 @@ services:
   app:
     image: node
     user: "node"
-    container_name: "lolpings-server"
     working_dir: /home/node/app
     restart: unless-stopped
     expose:
