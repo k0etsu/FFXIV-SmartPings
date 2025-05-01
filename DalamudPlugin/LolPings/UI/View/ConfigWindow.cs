@@ -124,10 +124,10 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
                     keybind : Keybind.None;
             }
         }
-        if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Right))
-        {
-            this.clearKeybind.OnNext(keybind);
-        }
+        //if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Right))
+        //{
+        //    this.clearKeybind.OnNext(keybind);
+        //}
         ImGui.SameLine();
         ImGui.Text(label);
     }
