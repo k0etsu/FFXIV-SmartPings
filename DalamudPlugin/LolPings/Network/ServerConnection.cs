@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace LolPings.Network;
 
-public class ServerConnection
+public class ServerConnection : IDisposable
 {
     /// <summary>
     /// When in a public room, this plugin will automatically switch rooms when the player changes maps.
@@ -93,6 +93,12 @@ public class ServerConnection
             logger.Warn("Could not load config file at {0}", configPath);
             this.loadConfig = new();
         }
+    }
+
+    public void Dispose()
+    {
+        this.Channel?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public void JoinPublicRoom()
