@@ -129,7 +129,7 @@ public class ServerConnection : IDisposable
         if (!autoRejoin)
         {
             this.ShouldBeInRoom = false;
-            //this.mapManager.OnMapChanged -= ReconnectToCurrentMapPublicRoom;
+            this.mapManager.OnMapChanged -= ReconnectToCurrentMapPublicRoom;
         }
 
         if (!this.InRoom)
