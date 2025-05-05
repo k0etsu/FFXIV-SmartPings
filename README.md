@@ -1,4 +1,4 @@
-# carPingus
+# SmartPings
 
 Plugin for [XIVLauncher/Dalamud](https://goatcorp.github.io/)
 
