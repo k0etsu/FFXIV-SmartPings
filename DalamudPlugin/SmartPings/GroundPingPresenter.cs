@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using SmartPings.Extensions;
 using SmartPings.Network;
 using SmartPings.UI.Presenter;
@@ -10,7 +11,7 @@ public class GroundPingPresenter : IPluginUIPresenter
 {
     public IPluginUIView View => this.view;
 
-    public SwapbackList<GroundPing> GroundPings = [];
+    public LinkedList<GroundPing> GroundPings = [];
 
     private readonly GroundPingView view;
     private readonly ServerConnection serverConnection;
@@ -32,7 +33,7 @@ public class GroundPingPresenter : IPluginUIPresenter
     {
         this.view.AddGroundPing.Subscribe(ping =>
         {
-            this.GroundPings.Add(ping);
+            this.GroundPings.AddLast(ping);
             this.serverConnection.SendGroundPing(ping);
         });
     }

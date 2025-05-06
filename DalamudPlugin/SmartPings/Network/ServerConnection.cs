@@ -314,6 +314,6 @@ public class ServerConnection : IDisposable
                 Z = payload.worldPositionZ,
             },
         };
-        this.groundPingPresenter.Value.GroundPings.Add(ping);
+        this.groundPingPresenter.Value.GroundPings.AddLast(ping);
     }
 }

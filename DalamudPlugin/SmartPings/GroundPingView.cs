@@ -1,5 +1,7 @@
-﻿using Dalamud.Plugin;
+﻿using Dalamud.Interface.Utility;
+using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using ImGuiNET;
 using SmartPings.Extensions;
 using SmartPings.Input;
@@ -9,6 +11,7 @@ using SmartPings.UI.View;
 using System;
 using System.Numerics;
 using System.Reactive.Subjects;
+using System.Runtime.CompilerServices;
 
 namespace SmartPings;
 
@@ -38,6 +41,9 @@ public unsafe class GroundPingView : IPluginUIView
 
     private bool leftMouseUpThisFrame;
     private bool createPingOnLeftMouseUp;
+
+    private Matrix4x4 viewProj;
+    private Vector4 nearPlane;
 
     public GroundPingView(
         Lazy<GroundPingPresenter> presenter,
@@ -116,45 +122,9 @@ public unsafe class GroundPingView : IPluginUIView
                 createPingOnLeftMouseUp = false;
             }
 
-            var mapId = this.mapManager.GetCurrentMapPublicRoomName();
-            for (var i = this.presenter.Value.GroundPings.Count - 1; i >= 0; i--)
+            if (!DrawPings())
             {
-                var p = this.presenter.Value.GroundPings[i];
-
-                if (mapId != p.MapId)
-                {
-                    this.presenter.Value.GroundPings.RemoveAt(i);
-                    continue;
-                }
-
-                if (this.gameGui.WorldToScreen(p.WorldPosition, out var screenPos))
-                {
-                    //this.logger.Info("Processing ping {0}. ScreenPos {1}", i, screenPos);
-                    bool pingDrawn = false;
-                    switch (p.PingType)
-                    {
-                        case GroundPing.Type.Basic:
-                            pingDrawn = DrawBasicPing(ImGui.GetForegroundDrawList(), screenPos, new(70, 70), p.DrawDuration, p.Author);
-                            break;
-                        case GroundPing.Type.Question:
-                            pingDrawn = DrawQuestionMarkPing(ImGui.GetForegroundDrawList(), screenPos, new(250, 250), p.DrawDuration, p.Author);
-                            break;
-                    }
-
-                    if (!pingDrawn)
-                    {
-                        this.presenter.Value.GroundPings.RemoveAt(i);
-                        continue;
-                    }
-                }
-                p.DrawDuration += ImGui.GetIO().DeltaTime;
-
-                // Extra cleanup
-                if (p.DrawDuration > 10)
-                {
-                    this.presenter.Value.GroundPings.RemoveAt(i);
-                    continue;
-                }
+                this.presenter.Value.GroundPings.Clear();
             }
         }
         else
@@ -195,9 +165,106 @@ public unsafe class GroundPingView : IPluginUIView
         leftMouseUpThisFrame = false;
     }
 
-    private bool DrawBasicPing(ImDrawListPtr drawList, Vector2 position, Vector2 size, float time, string? author)
+    private bool DrawPings()
+    {
+        // Setup draw matrices (taken from Pictomancy)
+        viewProj = Control.Instance()->ViewProjectionMatrix;
+
+        // The view matrix in CameraManager is 1 frame stale compared to the Control viewproj matrix.
+        // Computing the near plane using the stale view matrix results in clipping errors that look really bad when moving the camera.
+        // Instead, compute the view matrix using the accurate viewproj matrix multiplied by the stale inverse proj matrix (Which rarely changes)
+        var controlCamera = Control.Instance()->CameraManager.GetActiveCamera();
+        var renderCamera = controlCamera != null ? controlCamera->SceneCamera.RenderCamera : null;
+        if (renderCamera == null)
+        {
+            return false;
+        }
+        var Proj = renderCamera->ProjectionMatrix;
+        if (!Matrix4x4.Invert(Proj, out var InvProj))
+        {
+            return false;
+        }
+        var View = viewProj * InvProj;
+
+        nearPlane = new(View.M13, View.M23, View.M33, View.M43 + renderCamera->NearPlane);
+
+        var mapId = this.mapManager.GetCurrentMapPublicRoomName();
+        var pNode = this.presenter.Value.GroundPings.First;
+        while (pNode != null)
+        {
+            var p = pNode.Value;
+            var nextNode = pNode.Next;
+
+            if (mapId != p.MapId)
+            {
+                this.presenter.Value.GroundPings.Remove(pNode);
+                pNode = nextNode;
+                continue;
+            }
+
+            bool pingDrawn = false;
+            switch (p.PingType)
+            {
+                case GroundPing.Type.Basic:
+                    pingDrawn = DrawBasicPing(ImGui.GetForegroundDrawList(), p.WorldPosition, 1.0f, p.DrawDuration, p.Author);
+                    break;
+                    //case GroundPing.Type.Question:
+                    //    pingDrawn = DrawQuestionMarkPing(ImGui.GetForegroundDrawList(), screenPos, new(250, 250), p.DrawDuration, p.Author);
+                    //    break;
+            }
+
+            if (!pingDrawn)
+            {
+                this.presenter.Value.GroundPings.Remove(pNode);
+                pNode = nextNode;
+                continue;
+            }
+            p.DrawDuration += ImGui.GetIO().DeltaTime;
+
+            // Extra cleanup
+            if (p.DrawDuration > 10)
+            {
+                this.presenter.Value.GroundPings.Remove(pNode);
+                pNode = nextNode;
+                continue;
+            }
+
+            pNode = nextNode;
+        }
+
+        return true;
+    }
+
+    private bool DrawBasicPing(ImDrawListPtr drawList, Vector3 worldPosition, float scale, float time, string? author)
     {
         bool draw = false;
+        var onScreen = this.gameGui.WorldToScreen(worldPosition, out var screenPosition);
+
+        // Calculate screen size based on world position
+        var hForward = Vector3.Normalize(new Vector3(nearPlane.X, 0, nearPlane.Z));
+        var hRight = Vector3.Transform(hForward, Matrix4x4.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2));
+        var wpForward = worldPosition + scale * hForward;
+        var wpRight = worldPosition + scale * hRight;
+        var wpBack = worldPosition - scale * hForward;
+        var wpLeft = worldPosition - scale * hRight;
+        this.gameGui.WorldToScreen(wpForward, out var spForward);
+        this.gameGui.WorldToScreen(wpRight, out var spRight);
+        this.gameGui.WorldToScreen(wpBack, out var spBack);
+        this.gameGui.WorldToScreen(wpLeft, out var spLeft);
+
+        var ringSize = new Vector2(MathF.Abs(spRight.X - spLeft.X), MathF.Abs(spForward.Y - spBack.Y));
+        // Clamp to min and max sizes if necessary
+        if (ringSize.X < 70)
+        {
+            ringSize.Y *= 70 / ringSize.X;
+            ringSize.X = 70;
+        }
+        if (ringSize.X > 800)
+        {
+            ringSize.Y *= 800 / ringSize.X;
+            ringSize.X = 800;
+        }
+
         {
             var imgRing = this.textureProvider.GetFromFile(this.pluginInterface.GetResourcePath("basic_ping_ring_sheet.png")).GetWrapOrDefault()?.ImGuiHandle ?? default;
             float fps = 30;
@@ -210,18 +277,22 @@ public unsafe class GroundPingView : IPluginUIView
             int frame = (int)(time * fps);
             if (frame < totalFrames)
             {
-                int width = totalWidth / colCount;
-                int height = totalHeight / rowCount;
+                if (onScreen)
+                {
+                    int width = totalWidth / colCount;
+                    int height = totalHeight / rowCount;
 
-                int row = frame / colCount;
-                int col = frame % colCount;
+                    int row = frame / colCount;
+                    int col = frame % colCount;
 
-                var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
-                var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
+                    var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
+                    var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
 
-                var p0 = new Vector2(position.X - size.X * 1.5f / 2, position.Y - size.Y * 1.5f / 4);
-                var p1 = new Vector2(position.X + size.X * 1.5f / 2, position.Y + size.Y * 1.5f / 4);
-                drawList.AddImage(imgRing, p0, p1, uv0, uv1);
+                    var p0 = new Vector2(screenPosition.X - ringSize.X / 2, screenPosition.Y - ringSize.Y / 2);
+                    var p1 = new Vector2(screenPosition.X + ringSize.X / 2, screenPosition.Y + ringSize.Y / 2);
+
+                    drawList.AddImage(imgRing, p0, p1, uv0, uv1);
+                }
                 draw = true;
             }
         }
@@ -239,34 +310,40 @@ public unsafe class GroundPingView : IPluginUIView
             int frame = (int)(time * fps);
             if (frame < totalFrames)
             {
-                if (frame < frame0HoldFrames)
+                if (onScreen)
                 {
-                    frame = 0;
+                    if (frame < frame0HoldFrames)
+                    {
+                        frame = 0;
 
-                    // Draw author tag
-                    var fontSize = 20;
-                    var textSize = ImGui.CalcTextSize(author) * fontSize / 16;
-                    var minPad = new Vector2(-5, 0);
-                    drawList.AddRectFilled(position + minPad, position + textSize, Vector4Colors.Black.WithAlpha(0.6f).ToColorU32());
-                    drawList.AddText(ImGui.GetFont(), fontSize, position, Vector4Colors.White.ToColorU32(), author);
+                        // Draw author tag
+                        // TODO: Factor in Dalamud global font scale
+                        //var fontSize = 20;
+                        var fontSize = Math.Clamp(0.125f * ringSize.X, 17, 30);
+                        var textSize = ImGui.CalcTextSize(author) * fontSize / 16;
+                        var minPad = new Vector2(-5, 0);
+                        drawList.AddRectFilled(screenPosition + minPad, screenPosition + textSize, Vector4Colors.Black.WithAlpha(0.6f).ToColorU32());
+                        drawList.AddText(ImGui.GetFont(), fontSize, screenPosition, Vector4Colors.White.ToColorU32(), author);
+                    }
+                    else
+                    {
+                        frame -= (frame0HoldFrames - 1);
+                    }
+
+                    int width = totalWidth / colCount;
+                    int height = totalHeight / rowCount;
+
+                    int row = frame / colCount;
+                    int col = frame % colCount;
+
+                    var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
+                    var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
+
+                    var basicPingSize = ringSize.X * 0.5f;
+                    var p0 = new Vector2(screenPosition.X - basicPingSize / 2, screenPosition.Y - basicPingSize);
+                    var p1 = new Vector2(screenPosition.X + basicPingSize / 2, screenPosition.Y);
+                    drawList.AddImage(imgPing, p0, p1, uv0, uv1);
                 }
-                else
-                {
-                    frame -= (frame0HoldFrames - 1);
-                }
-
-                int width = totalWidth / colCount;
-                int height = totalHeight / rowCount;
-
-                int row = frame / colCount;
-                int col = frame % colCount;
-
-                var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
-                var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
-
-                var p0 = new Vector2(position.X - size.X / 2, position.Y - size.Y);
-                var p1 = new Vector2(position.X + size.X / 2, position.Y);
-                drawList.AddImage(imgPing, p0, p1, uv0, uv1);
                 draw = true;
             }
         }
@@ -274,39 +351,66 @@ public unsafe class GroundPingView : IPluginUIView
         return draw;
     }
 
-    private bool DrawQuestionMarkPing(ImDrawListPtr drawList, Vector2 position, Vector2 size, float time, string? author)
+    //private bool DrawQuestionMarkPing(ImDrawListPtr drawList, Vector2 position, Vector2 size, float time, string? author)
+    //{
+    //    var img = this.textureProvider.GetFromFile(this.pluginInterface.GetResourcePath("question_sheet.png")).GetWrapOrDefault()?.ImGuiHandle ?? default;
+    //    float fps = 45;
+    //    int rowCount = 5;
+    //    int colCount = 11;
+    //    int totalFrames = 54;
+    //    int totalWidth = 7700;
+    //    int totalHeight = 3500;
+
+    //    int frame = (int)(time * fps); // 0-index
+    //    if (frame >= totalFrames)
+    //    {
+    //        return false;
+    //    }
+
+    //    int width = totalWidth / colCount;
+    //    int height = totalHeight / rowCount;
+
+    //    int row = frame / colCount;
+    //    int col = frame % colCount;
+
+    //    var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
+    //    var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
+
+    //    drawList.AddImage(img, position - size / 2, position + size / 2, uv0, uv1);
+
+    //    var fontSize = 20;
+    //    var textSize = ImGui.CalcTextSize(author) * fontSize / 16;
+    //    var minPad = new Vector2(-5, 0);
+    //    drawList.AddRectFilled(position + minPad, position + textSize, Vector4Colors.Black.WithAlpha(0.6f).ToColorU32());
+    //    drawList.AddText(ImGui.GetFont(), fontSize, position, Vector4Colors.White.ToColorU32(), author);
+
+    //    return true;
+    //}
+
+    // Taken from Pictomancy
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void TransformCoordinate(in Vector3 coordinate, in Matrix4x4 transform, out Vector3 result)
     {
-        var img = this.textureProvider.GetFromFile(this.pluginInterface.GetResourcePath("question_sheet.png")).GetWrapOrDefault()?.ImGuiHandle ?? default;
-        float fps = 45;
-        int rowCount = 5;
-        int colCount = 11;
-        int totalFrames = 54;
-        int totalWidth = 7700;
-        int totalHeight = 3500;
+        result.X = (coordinate.X * transform.M11) + (coordinate.Y * transform.M21) + (coordinate.Z * transform.M31) + transform.M41;
+        result.Y = (coordinate.X * transform.M12) + (coordinate.Y * transform.M22) + (coordinate.Z * transform.M32) + transform.M42;
+        result.Z = (coordinate.X * transform.M13) + (coordinate.Y * transform.M23) + (coordinate.Z * transform.M33) + transform.M43;
+        var w = 1f / ((coordinate.X * transform.M14) + (coordinate.Y * transform.M24) + (coordinate.Z * transform.M34) + transform.M44);
+        result *= w;
+    }
 
-        int frame = (int)(time * fps); // 0-index
-        if (frame >= totalFrames)
-        {
-            return false;
-        }
+    public static Vector2 WorldToScreenOld(in Matrix4x4 viewProj, in Vector3 worldPos)
+    {
+        TransformCoordinate(worldPos, viewProj, out Vector3 viewPos);
+        return new Vector2(
+            0.5f * ImGuiHelpers.MainViewport.Size.X * (1 + viewPos.X),
+            0.5f * ImGuiHelpers.MainViewport.Size.Y * (1 - viewPos.Y)) + ImGuiHelpers.MainViewport.Pos;
+    }
 
-        int width = totalWidth / colCount;
-        int height = totalHeight / rowCount;
-
-        int row = frame / colCount;
-        int col = frame % colCount;
-
-        var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
-        var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
-
-        drawList.AddImage(img, position - size / 2, position + size / 2, uv0, uv1);
-
-        var fontSize = 20;
-        var textSize = ImGui.CalcTextSize(author) * fontSize / 16;
-        var minPad = new Vector2(-5, 0);
-        drawList.AddRectFilled(position + minPad, position + textSize, Vector4Colors.Black.WithAlpha(0.6f).ToColorU32());
-        drawList.AddText(ImGui.GetFont(), fontSize, position, Vector4Colors.White.ToColorU32(), author);
-
-        return true;
+    public static Vector2 WorldToScreen(in Matrix4x4 viewProj, in Vector3 worldPos)
+    {
+        var viewPos = Vector4.Transform(worldPos, viewProj);
+        return new Vector2(
+            0.5f * ImGuiHelpers.MainViewport.Size.X * (1 + viewPos.X),
+            0.5f * ImGuiHelpers.MainViewport.Size.Y * (1 - viewPos.Y)) + ImGuiHelpers.MainViewport.Pos;
     }
 }
