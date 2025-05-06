@@ -40,6 +40,9 @@ public class ConfigWindowPresenter(
 
     private void BindVariables()
     {
+        Bind(this.view.EnablePingInput,
+            b => { this.configuration.EnablePingInput = b; this.configuration.Save(); }, this.configuration.EnablePingInput);
+
         Bind(this.view.MasterVolume,
             f => { this.configuration.MasterVolume = f; this.configuration.Save(); }, this.configuration.MasterVolume);
 

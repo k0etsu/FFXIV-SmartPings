@@ -19,6 +19,8 @@ namespace SmartPings
 
         public int SelectedAudioOutputDeviceIndex { get; set; } = -1;
 
+        public bool EnablePingInput { get; set; } = true;
+
         public float MasterVolume { get; set; } = 2.0f;
 
         public bool PlayRoomJoinAndLeaveSounds { get; set; } = true;

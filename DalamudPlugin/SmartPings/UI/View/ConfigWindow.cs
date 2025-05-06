@@ -25,6 +25,7 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         set => this.visible = value;
     }
 
+    public IReactiveProperty<bool> EnablePingInput { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<Keybind> KeybindBeingEdited { get; } = new ReactiveProperty<Keybind>();
 
     public IReactiveProperty<float> MasterVolume { get; } = new ReactiveProperty<float>();
@@ -84,31 +85,37 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         using var tabs = ImRaii.TabBar("pvc-config-tabs");
         if (!tabs) return;
 
-        DrawDeviceTab();
-        DrawFalloffTab();
+        DrawMainTab();
+        //DrawFalloffTab();
         DrawMiscTab();
     }
 
-    private void DrawDeviceTab()
+    private void DrawMainTab()
     {
-        using var deviceTab = ImRaii.TabItem("Audio Devices");
+        using var deviceTab = ImRaii.TabItem("Main");
         if (!deviceTab) return;
 
-        using (var deviceTable = ImRaii.Table("AudioDevices", 2))
-        {
-            if (deviceTable)
-            {
-                ImGui.TableSetupColumn("AudioDevicesCol1", ImGuiTableColumnFlags.WidthFixed, 80);
-                ImGui.TableSetupColumn("AudioDevicesCol2", ImGuiTableColumnFlags.WidthFixed, 230);
+        //using (var deviceTable = ImRaii.Table("AudioDevices", 2))
+        //{
+        //    if (deviceTable)
+        //    {
+        //        ImGui.TableSetupColumn("AudioDevicesCol1", ImGuiTableColumnFlags.WidthFixed, 80);
+        //        ImGui.TableSetupColumn("AudioDevicesCol2", ImGuiTableColumnFlags.WidthFixed, 230);
 
-                ImGui.TableNextRow(); ImGui.TableNextColumn();
-                ImGui.AlignTextToFramePadding();
-                ImGui.Text("Output Device"); ImGui.TableNextColumn();
-            }
-        }
+        //        ImGui.TableNextRow(); ImGui.TableNextColumn();
+        //        ImGui.AlignTextToFramePadding();
+        //        ImGui.Text("Output Device"); ImGui.TableNextColumn();
+        //    }
+        //}
 
         //DrawKeybindEdit(Keybind.MuteMic, this.configuration.MuteMicKeybind, "Mute Microphone Keybind");
         //DrawKeybindEdit(Keybind.Deafen, this.configuration.DeafenKeybind, "Deafen Keybind");
+
+        var enablePingInput = this.EnablePingInput.Value;
+        if (ImGui.Checkbox("Enable Ping Input", ref enablePingInput))
+        {
+            this.EnablePingInput.Value = enablePingInput;
+        }
     }
 
     private void DrawKeybindEdit(Keybind keybind, KeyCode currentBinding, string label)

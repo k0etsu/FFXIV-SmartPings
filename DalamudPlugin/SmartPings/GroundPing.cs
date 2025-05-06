@@ -7,6 +7,7 @@ public class GroundPing
     public enum Type : int
     {
         None = 0,
+        Basic = 1,
         Question = 3,
     }
 

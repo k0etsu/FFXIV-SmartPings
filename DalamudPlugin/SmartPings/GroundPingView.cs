@@ -32,6 +32,7 @@ public unsafe class GroundPingView : IPluginUIView
     private readonly ITextureProvider textureProvider;
     private readonly IKeyState keyState;
     private readonly InputEventSource inputEventSource;
+    private readonly Configuration configuration;
     private readonly MapManager mapManager;
     private readonly ILogger logger;
 
@@ -46,6 +47,7 @@ public unsafe class GroundPingView : IPluginUIView
         ITextureProvider textureProvider,
         IKeyState keyState,
         InputEventSource inputEventSource,
+        Configuration configuration,
         MapManager mapManager,
         ILogger logger)
     {
@@ -56,11 +58,17 @@ public unsafe class GroundPingView : IPluginUIView
         this.textureProvider = textureProvider;
         this.keyState = keyState;
         this.inputEventSource = inputEventSource;
+        this.configuration = configuration;
         this.mapManager = mapManager;
         this.logger = logger;
 
         this.inputEventSource.SubscribeToKeyDown(args =>
         {
+            if (!this.configuration.EnablePingInput)
+            {
+                return;
+            }
+
             if (args.Key == WindowsInput.Events.KeyCode.LButton &&
                 this.keyState.GetRawValue(Dalamud.Game.ClientState.Keys.VirtualKey.CONTROL) > 0)
             {
@@ -90,28 +98,21 @@ public unsafe class GroundPingView : IPluginUIView
 
         if (clientState.LocalPlayer != null)
         {
-            if (this.keyState.GetRawValue(Dalamud.Game.ClientState.Keys.VirtualKey.CONTROL) > 0)
+            if (createPingOnLeftMouseUp && leftMouseUpThisFrame)
             {
-                if (createPingOnLeftMouseUp && leftMouseUpThisFrame)
+                if (this.gameGui.ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
                 {
-                    if (this.gameGui.ScreenToWorld(ImGui.GetMousePos(), out var worldPos))
+                    this.logger.Debug("Clicked on world position {0} for ground ping", worldPos);
+                    var ping = new GroundPing
                     {
-                        this.logger.Debug("Clicked on world position {0} for ground ping", worldPos);
-                        var ping = new GroundPing
-                        {
-                            PingType = GroundPing.Type.Question,
-                            StartTimestamp = DateTime.UtcNow.Ticks,
-                            Author = this.clientState.LocalPlayer.Name.TextValue,
-                            MapId = this.mapManager.GetCurrentMapPublicRoomName(),
-                            WorldPosition = worldPos,
-                        };
-                        this.addGroundPing.OnNext(ping);
-                    }
-                    createPingOnLeftMouseUp = false;
+                        PingType = GroundPing.Type.Basic,
+                        StartTimestamp = DateTime.UtcNow.Ticks,
+                        Author = this.clientState.LocalPlayer.Name.TextValue,
+                        MapId = this.mapManager.GetCurrentMapPublicRoomName(),
+                        WorldPosition = worldPos,
+                    };
+                    this.addGroundPing.OnNext(ping);
                 }
-            }
-            else
-            {
                 createPingOnLeftMouseUp = false;
             }
 
@@ -129,7 +130,18 @@ public unsafe class GroundPingView : IPluginUIView
                 if (this.gameGui.WorldToScreen(p.WorldPosition, out var screenPos))
                 {
                     //this.logger.Info("Processing ping {0}. ScreenPos {1}", i, screenPos);
-                    if (!DrawQuestionMarkPing(ImGui.GetForegroundDrawList(), screenPos, new(250, 250), p.DrawDuration, p.Author))
+                    bool pingDrawn = false;
+                    switch (p.PingType)
+                    {
+                        case GroundPing.Type.Basic:
+                            pingDrawn = DrawBasicPing(ImGui.GetForegroundDrawList(), screenPos, new(70, 70), p.DrawDuration, p.Author);
+                            break;
+                        case GroundPing.Type.Question:
+                            pingDrawn = DrawQuestionMarkPing(ImGui.GetForegroundDrawList(), screenPos, new(250, 250), p.DrawDuration, p.Author);
+                            break;
+                    }
+
+                    if (!pingDrawn)
                     {
                         this.presenter.Value.GroundPings.RemoveAt(i);
                         continue;
@@ -181,6 +193,85 @@ public unsafe class GroundPingView : IPluginUIView
         //}
 
         leftMouseUpThisFrame = false;
+    }
+
+    private bool DrawBasicPing(ImDrawListPtr drawList, Vector2 position, Vector2 size, float time, string? author)
+    {
+        bool draw = false;
+        {
+            var imgRing = this.textureProvider.GetFromFile(this.pluginInterface.GetResourcePath("basic_ping_ring_sheet.png")).GetWrapOrDefault()?.ImGuiHandle ?? default;
+            float fps = 30;
+            int rowCount = 5;
+            int colCount = 7;
+            int totalFrames = 35;
+            int totalWidth = 1792;
+            int totalHeight = 1280;
+
+            int frame = (int)(time * fps);
+            if (frame < totalFrames)
+            {
+                int width = totalWidth / colCount;
+                int height = totalHeight / rowCount;
+
+                int row = frame / colCount;
+                int col = frame % colCount;
+
+                var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
+                var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
+
+                var p0 = new Vector2(position.X - size.X * 1.5f / 2, position.Y - size.Y * 1.5f / 4);
+                var p1 = new Vector2(position.X + size.X * 1.5f / 2, position.Y + size.Y * 1.5f / 4);
+                drawList.AddImage(imgRing, p0, p1, uv0, uv1);
+                draw = true;
+            }
+        }
+
+        {
+            var imgPing = this.textureProvider.GetFromFile(this.pluginInterface.GetResourcePath("basic_ping_sheet.png")).GetWrapOrDefault()?.ImGuiHandle ?? default;
+            float fps = 30;
+            int rowCount = 4;
+            int colCount = 4;
+            int totalFrames = 60;
+            int totalWidth = 2048;
+            int totalHeight = 2048;
+            int frame0HoldFrames = 46;
+
+            int frame = (int)(time * fps);
+            if (frame < totalFrames)
+            {
+                if (frame < frame0HoldFrames)
+                {
+                    frame = 0;
+
+                    // Draw author tag
+                    var fontSize = 20;
+                    var textSize = ImGui.CalcTextSize(author) * fontSize / 16;
+                    var minPad = new Vector2(-5, 0);
+                    drawList.AddRectFilled(position + minPad, position + textSize, Vector4Colors.Black.WithAlpha(0.6f).ToColorU32());
+                    drawList.AddText(ImGui.GetFont(), fontSize, position, Vector4Colors.White.ToColorU32(), author);
+                }
+                else
+                {
+                    frame -= (frame0HoldFrames - 1);
+                }
+
+                int width = totalWidth / colCount;
+                int height = totalHeight / rowCount;
+
+                int row = frame / colCount;
+                int col = frame % colCount;
+
+                var uv0 = new Vector2((float)col / colCount, (float)row / rowCount);
+                var uv1 = uv0 + new Vector2((float)width / totalWidth, (float)height / totalHeight);
+
+                var p0 = new Vector2(position.X - size.X / 2, position.Y - size.Y);
+                var p1 = new Vector2(position.X + size.X / 2, position.Y);
+                drawList.AddImage(imgPing, p0, p1, uv0, uv1);
+                draw = true;
+            }
+        }
+
+        return draw;
     }
 
     private bool DrawQuestionMarkPing(ImDrawListPtr drawList, Vector2 position, Vector2 size, float time, string? author)
