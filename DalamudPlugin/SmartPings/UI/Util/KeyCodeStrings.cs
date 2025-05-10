@@ -1,4 +1,5 @@
-﻿using WindowsInput.Events;
+﻿using Dalamud.Game.ClientState.Keys;
+using WindowsInput.Events;
 
 namespace SmartPings.UI.Util;
 
@@ -58,6 +59,17 @@ public class KeyCodeStrings
                 return "ScrollLock";
             default:
                 return keyCode.ToString();
+        }
+    }
+
+    public static string TranslateKeyCode(VirtualKey key)
+    {
+        switch(key)
+        {
+            case VirtualKey.MENU:
+                return "ALT";
+            default:
+                return key.ToString();
         }
     }
 }

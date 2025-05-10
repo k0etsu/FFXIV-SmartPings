@@ -40,7 +40,7 @@ public class PluginModule : NinjectModule
         Bind<IDalamudHook>().To<CommandDispatcher>().InSingletonScope();
         Bind<Configuration>().ToMethod(GetConfiguration).InSingletonScope();
         Bind<InputEventSource>().ToSelf().InSingletonScope();
-        Bind<InputManager>().ToSelf().InSingletonScope();
+        Bind<KeyStateWrapper>().ToSelf().InSingletonScope();
         Bind<IAudioDeviceController, AudioDeviceController>().To<AudioDeviceController>().InSingletonScope();
         Bind<ServerConnection>().ToSelf().InSingletonScope();
         Bind<Spatializer>().ToSelf().InSingletonScope();

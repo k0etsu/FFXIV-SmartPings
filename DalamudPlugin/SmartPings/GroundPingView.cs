@@ -70,13 +70,14 @@ public unsafe class GroundPingView : IPluginUIView
 
         this.inputEventSource.SubscribeToKeyDown(args =>
         {
-            if (!this.configuration.EnablePingInput)
-            {
-                return;
-            }
+            //if (!this.configuration.EnablePingInput)
+            //{
+            //    return;
+            //}
 
             if (args.Key == WindowsInput.Events.KeyCode.LButton &&
-                this.keyState.GetRawValue(Dalamud.Game.ClientState.Keys.VirtualKey.CONTROL) > 0)
+                this.keyState.IsVirtualKeyValid(this.configuration.QuickPingKeybind) &&
+                this.keyState.GetRawValue(this.configuration.QuickPingKeybind) > 0)
             {
                 createPingOnLeftMouseUp = true;
                 // Both lines are needed to consistently capture mouse input

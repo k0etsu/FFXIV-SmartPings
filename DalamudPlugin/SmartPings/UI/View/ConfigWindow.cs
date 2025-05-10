@@ -12,6 +12,7 @@ using System.Reactive.Subjects;
 using System.Linq;
 using System.Diagnostics;
 using WindowsInput.Events;
+using Dalamud.Game.ClientState.Keys;
 
 namespace SmartPings.UI.View;
 
@@ -27,6 +28,8 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
 
     public IReactiveProperty<bool> EnablePingInput { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<Keybind> KeybindBeingEdited { get; } = new ReactiveProperty<Keybind>();
+    public IObservable<Keybind> ClearKeybind => clearKeybind.AsObservable();
+    private readonly Subject<Keybind> clearKeybind = new();
 
     public IReactiveProperty<float> MasterVolume { get; } = new ReactiveProperty<float>();
 
@@ -108,17 +111,23 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         //    }
         //}
 
-        //DrawKeybindEdit(Keybind.MuteMic, this.configuration.MuteMicKeybind, "Mute Microphone Keybind");
-        //DrawKeybindEdit(Keybind.Deafen, this.configuration.DeafenKeybind, "Deafen Keybind");
+        //var globalFontScale = ImGui.GetIO().FontGlobalScale;
+        ////ImGui.GetIO().FontGlobalScale = 1.5f * globalFontScale;
+        ImGui.Text("Keybinds");
+        //ImGui.GetIO().FontGlobalScale = globalFontScale;
+        ImGui.SameLine(); Common.HelpMarker("Right click to clear a keybind.");
+        //DrawKeybindEdit(Keybind.Ping, this.configuration.PingKeybind, "Ping Keybind");
+        DrawKeybindEdit(Keybind.QuickPing, this.configuration.QuickPingKeybind, "Quick Ping Keybind",
+            "Lefting clicking while holding this keybind will execute a ping.");
 
-        var enablePingInput = this.EnablePingInput.Value;
-        if (ImGui.Checkbox("Enable Ping Input", ref enablePingInput))
-        {
-            this.EnablePingInput.Value = enablePingInput;
-        }
+        //var enablePingInput = this.EnablePingInput.Value;
+        //if (ImGui.Checkbox("Enable Ping Input", ref enablePingInput))
+        //{
+        //    this.EnablePingInput.Value = enablePingInput;
+        //}
     }
 
-    private void DrawKeybindEdit(Keybind keybind, KeyCode currentBinding, string label)
+    private void DrawKeybindEdit(Keybind keybind, VirtualKey currentBinding, string label, string? tooltip = null)
     {
         using var id = ImRaii.PushId($"{keybind} Keybind");
         {
@@ -131,12 +140,17 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
                     keybind : Keybind.None;
             }
         }
-        //if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Right))
-        //{
-        //    this.clearKeybind.OnNext(keybind);
-        //}
+        if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Right))
+        {
+            this.clearKeybind.OnNext(keybind);
+            this.KeybindBeingEdited.Value = Keybind.None;
+        }
         ImGui.SameLine();
         ImGui.Text(label);
+        if (!string.IsNullOrEmpty(tooltip) && ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(tooltip);
+        }
     }
 
     private void DrawFalloffTab()

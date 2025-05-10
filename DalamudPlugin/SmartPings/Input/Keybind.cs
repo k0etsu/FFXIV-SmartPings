@@ -3,7 +3,6 @@
 public enum Keybind : byte
 {
     None = 0,
-    PushToTalk = 1,
-    MuteMic = 2,
-    Deafen = 3,
+    Ping = 1,
+    QuickPing = 2,
 }

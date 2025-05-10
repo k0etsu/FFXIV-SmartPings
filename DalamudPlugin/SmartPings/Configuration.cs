@@ -1,4 +1,5 @@
 ﻿using Dalamud.Configuration;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin;
 using NLog;
 using System;
@@ -20,6 +21,8 @@ namespace SmartPings
         public int SelectedAudioOutputDeviceIndex { get; set; } = -1;
 
         public bool EnablePingInput { get; set; } = true;
+        public VirtualKey PingKeybind { get; set; } = VirtualKey.G;
+        public VirtualKey QuickPingKeybind { get; set; } = VirtualKey.CONTROL;
 
         public float MasterVolume { get; set; } = 2.0f;
 

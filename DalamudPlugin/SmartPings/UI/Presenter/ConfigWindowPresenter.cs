@@ -1,34 +1,33 @@
-﻿using System;
+﻿using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin.Services;
+using Reactive.Bindings;
 using SmartPings.Input;
 using SmartPings.Log;
 using SmartPings.UI.View;
-using Reactive.Bindings;
-using WindowsInput.Events;
+using System;
 
 namespace SmartPings.UI.Presenter;
 
 public class ConfigWindowPresenter(
     ConfigWindow view,
-    Configuration configuration,
     IFramework framework,
-    InputEventSource inputEventSource,
-    InputManager inputManager,
+    Configuration configuration,
+    KeyStateWrapper keyStateWrapper,
     ILogger logger) : IPluginUIPresenter, IDisposable
 {
     public IPluginUIView View => this.view;
 
-    private readonly ConfigWindow view = view ?? throw new ArgumentNullException(nameof(view));
-    private readonly Configuration configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-    private readonly IFramework framework = framework ?? throw new ArgumentNullException(nameof(framework));
-    private readonly InputEventSource inputEventSource = inputEventSource ?? throw new ArgumentNullException(nameof(inputEventSource));
-    private readonly InputManager inputManager = inputManager ?? throw new ArgumentNullException(nameof(inputManager));
-    private readonly ILogger logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ConfigWindow view = view;
+    private readonly IFramework framework = framework;
+    private readonly Configuration configuration = configuration;
+    private readonly KeyStateWrapper keyStateWrapper = keyStateWrapper;
+    private readonly ILogger logger = logger;
 
     private bool keyDownListenerSubscribed;
 
     public void Dispose()
     {
+        this.keyStateWrapper.OnKeyDown -= OnKeyDown;
         GC.SuppressFinalize(this);
     }
 
@@ -58,18 +57,31 @@ public class ConfigWindowPresenter(
 
     private void BindActions()
     {
-        this.view.KeybindBeingEdited.Subscribe(k => 
+        this.view.KeybindBeingEdited.Subscribe(k =>
         {
             if (k != Keybind.None && !this.keyDownListenerSubscribed)
             {
-                this.inputEventSource.SubscribeToKeyDown(OnInputKeyDown);
+                this.keyStateWrapper.OnKeyDown += OnKeyDown;
                 this.keyDownListenerSubscribed = true;
             }
             else if (k == Keybind.None && this.keyDownListenerSubscribed)
             {
-                this.inputEventSource.UnsubscribeToKeyDown(OnInputKeyDown);
+                this.keyStateWrapper.OnKeyDown -= OnKeyDown;
                 this.keyDownListenerSubscribed = false;
             }
+        });
+        this.view.ClearKeybind.Subscribe(k =>
+        {
+            switch (k)
+            {
+                case Keybind.Ping:
+                    this.configuration.PingKeybind = default; break;
+                case Keybind.QuickPing:
+                    this.configuration.QuickPingKeybind = default; break;
+                default:
+                    return;
+            }
+            this.configuration.Save();
         });
     }
 
@@ -85,8 +97,11 @@ public class ConfigWindowPresenter(
         reactiveProperty.Subscribe(dataUpdateAction);
     }
 
-    private void OnInputKeyDown(KeyDown k)
+    private void OnKeyDown(VirtualKey key)
     {
+        // Disallow any keybinds to left mouse
+        if (key == VirtualKey.LBUTTON) { return; }
+
         // This callback can be called from a non-framework thread, and UI values should only be modified
         // on the framework thread (or else the game can crash)
         this.framework.Run(() =>
@@ -94,23 +109,16 @@ public class ConfigWindowPresenter(
             var editedKeybind = this.view.KeybindBeingEdited.Value;
             this.view.KeybindBeingEdited.Value = Keybind.None;
 
-            //switch (editedKeybind)
-            //{
-            //    case Keybind.PushToTalk:
-            //        this.configuration.PushToTalkKeybind = k.Key;
-            //        break;
-            //    case Keybind.MuteMic:
-            //        this.configuration.MuteMicKeybind = k.Key;
-            //        break;
-            //    case Keybind.Deafen:
-            //        this.configuration.DeafenKeybind = k.Key;
-            //        break;
-            //    default:
-            //        return;
-            //}
+            switch (editedKeybind)
+            {
+                case Keybind.Ping:
+                    this.configuration.PingKeybind = key; break;
+                case Keybind.QuickPing:
+                    this.configuration.QuickPingKeybind = key; break;
+                default:
+                    return;
+            }
             this.configuration.Save();
-            this.inputManager.UpdateListeners();
         });
-
     }
 }
