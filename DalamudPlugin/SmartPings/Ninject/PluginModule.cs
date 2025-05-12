@@ -3,12 +3,13 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Ninject.Activation;
 using Ninject.Modules;
+using SmartPings.Audio;
 using SmartPings.Input;
 using SmartPings.Log;
+using SmartPings.Network;
 using SmartPings.UI;
 using SmartPings.UI.Presenter;
 using SmartPings.UI.View;
-using SmartPings.Network;
 
 namespace SmartPings.Ninject;
 
@@ -45,6 +46,8 @@ public class PluginModule : NinjectModule
         Bind<ServerConnection>().ToSelf().InSingletonScope();
         Bind<Spatializer>().ToSelf().InSingletonScope();
         Bind<MapManager>().ToSelf().InSingletonScope();
+        Bind<UiPingHandler>().ToSelf().InSingletonScope();
+        Bind<XivHudNodeMap>().ToSelf().InSingletonScope();
 
         // Views and Presenters
         Bind<WindowSystem>().ToMethod(_ => new(PluginInitializer.Name)).InSingletonScope();

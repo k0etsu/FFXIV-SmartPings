@@ -2,7 +2,6 @@
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Plugin.Services;
 using SmartPings.Extensions;
-using SmartPings.Input;
 using SmartPings.Log;
 using System;
 using System.Linq;
@@ -10,7 +9,7 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SmartPings;
+namespace SmartPings.Audio;
 
 public class Spatializer : IDisposable
 {

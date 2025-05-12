@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace SmartPings.Input;
+namespace SmartPings.Audio;
 
 public interface IAudioDeviceController
 {

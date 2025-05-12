@@ -1,18 +1,18 @@
-﻿using Dalamud.Interface.Utility.Raii;
+﻿using Dalamud.Game.ClientState.Keys;
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
-using SmartPings.Input;
-using SmartPings.UI.Util;
-using SmartPings.Log;
 using Reactive.Bindings;
+using SmartPings.Audio;
+using SmartPings.Input;
+using SmartPings.Log;
+using SmartPings.UI.Util;
 using System;
+using System.Diagnostics;
+using System.Linq;
 using System.Numerics;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using System.Linq;
-using System.Diagnostics;
-using WindowsInput.Events;
-using Dalamud.Game.ClientState.Keys;
 
 namespace SmartPings.UI.View;
 

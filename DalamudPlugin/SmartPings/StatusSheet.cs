@@ -5,39 +5,6 @@ namespace SmartPings;
 
 public readonly struct StatusSheet
 {
-    public struct Status
-    {
-        public uint Id;
-        public string Name;
-        public string Description;
-        public uint Icon;
-        public int ParamModifier;
-        public uint VfxRowId;
-        public ushort Log;
-        public byte Unknown0;
-        public byte MaxStacks;
-        public byte StatusCategory;
-        public byte PartyListPriority;
-        public byte CanIncreaseRewards;
-        public byte ParamEffect;
-        public byte TargetType;
-        public byte Flags;
-        public byte Flag2;
-        public byte Unknown_70_1;
-        public sbyte Unknown2;
-        public bool LockMovement;
-        public bool LockActions;
-        public bool LockControl;
-        public bool Transfiguration;
-        public bool IsGaze;
-        public bool CanDispel;
-        public bool InflictedByActor;
-        public bool IsPermanent;
-        public bool CanStatusOff;
-        public bool IsFcBuff;
-        public bool Invisibility;
-    }
-
     public int Count => this.statusesById.Count;
 
     private readonly Dictionary<uint, Status> statusesById = [];

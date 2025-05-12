@@ -1,7 +1,7 @@
 ﻿using NAudio.Wave;
 using System;
 
-namespace SmartPings.Input;
+namespace SmartPings.Audio;
 
 //https://markheath.net/post/fire-and-forget-audio-playback-with 
 public class CachedSoundSampleProvider(CachedSound cachedSound) : ISampleProvider

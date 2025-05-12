@@ -2,7 +2,7 @@
 using NAudio.Wave.SampleProviders;
 using System;
 
-namespace SmartPings.Input;
+namespace SmartPings.Audio;
 
 public class PlaybackChannel : IDisposable
 {

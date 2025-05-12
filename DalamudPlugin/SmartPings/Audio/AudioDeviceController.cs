@@ -8,7 +8,7 @@ using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using SmartPings.Log;
 
-namespace SmartPings.Input;
+namespace SmartPings.Audio;
 
 public class AudioDeviceController : IAudioDeviceController, IDisposable
 {
@@ -377,7 +377,7 @@ public class AudioDeviceController : IAudioDeviceController, IDisposable
                 DesiredLatency = WaveOutDesiredLatency,
                 NumberOfBuffers = WaveOutNumberOfBuffers,
             };
-            this.audioPlaybackSource.PlaybackStopped += (object? sender, StoppedEventArgs e) =>
+            this.audioPlaybackSource.PlaybackStopped += (sender, e) =>
             {
                 this.playingBack = false;
             };
@@ -474,7 +474,7 @@ public class AudioDeviceController : IAudioDeviceController, IDisposable
     /// <param name="float32">Float32 size is half</param>
     /// <returns></returns>
     private static int GetSampleSize(int sampleRate, int timeLengthMs, int channels)
-        => ((int)(sampleRate * 16f / 8f * (timeLengthMs / 1000f) * channels));
+        => (int)(sampleRate * 16f / 8f * (timeLengthMs / 1000f) * channels);
 
     /// <summary>
     /// Converts 16 bit PCM data into float 32.
@@ -511,7 +511,7 @@ public class AudioDeviceController : IAudioDeviceController, IDisposable
             // Math.Clamp solution found from https://github.com/mumble-voip/mumble/pull/5363
             short outsample = (short)Math.Clamp(input[sampleIndex] * short.MaxValue, short.MinValue, short.MaxValue);
             output[pcmIndex] = (byte)(outsample & 0xff);
-            output[pcmIndex + 1] = (byte)((outsample >> 8) & 0xff);
+            output[pcmIndex + 1] = (byte)(outsample >> 8 & 0xff);
 
             sampleIndex++;
             pcmIndex += 2;

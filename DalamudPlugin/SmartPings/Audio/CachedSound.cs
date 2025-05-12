@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SmartPings.Input;
+namespace SmartPings.Audio;
 
 // https://markheath.net/post/fire-and-forget-audio-playback-with
 public class CachedSound

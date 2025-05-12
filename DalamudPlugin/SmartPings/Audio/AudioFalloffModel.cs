@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace SmartPings
+namespace SmartPings.Audio
 {
     [Serializable]
     public class AudioFalloffModel
