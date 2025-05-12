@@ -1,8 +1,24 @@
-﻿using Dalamud.Interface.Utility;
+﻿using Dalamud.Game;
+using Dalamud.Game.Addon.Events;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Gui;
+using Dalamud.Interface.Utility;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Arrays;
+using FFXIVClientStructs.FFXIV.Common.Component.Excel;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using ImGuiNET;
+using Lumina.Excel.Sheets;
+using Lumina.Excel.Sheets.Experimental;
+using Newtonsoft.Json;
 using SmartPings.Extensions;
 using SmartPings.Input;
 using SmartPings.Log;
@@ -15,7 +31,7 @@ using System.Runtime.CompilerServices;
 
 namespace SmartPings;
 
-public unsafe class GroundPingView : IPluginUIView
+public unsafe class GroundPingView : IPluginUIView, IDisposable
 {
     // this extra bool exists for ImGui, since you can't ref a property
     private bool visible = false;
@@ -34,10 +50,15 @@ public unsafe class GroundPingView : IPluginUIView
     private readonly IGameGui gameGui;
     private readonly ITextureProvider textureProvider;
     private readonly IKeyState keyState;
+    private readonly IAddonLifecycle addonLifecycle;
+    private readonly IAddonEventManager addonEventManager;
+    private readonly IDataManager dataManager;
     private readonly InputEventSource inputEventSource;
     private readonly Configuration configuration;
     private readonly MapManager mapManager;
     private readonly ILogger logger;
+
+    public StatusSheet statusSheet;
 
     private bool leftMouseUpThisFrame;
     private bool createPingOnLeftMouseUp;
@@ -52,6 +73,11 @@ public unsafe class GroundPingView : IPluginUIView
         IGameGui gameGui,
         ITextureProvider textureProvider,
         IKeyState keyState,
+        IAddonLifecycle addonLifecycle,
+        IAddonEventManager addonEventManager,
+        IDataManager dataManager,
+        IFramework framework,
+        IChatGui chatGui,
         InputEventSource inputEventSource,
         Configuration configuration,
         MapManager mapManager,
@@ -63,10 +89,20 @@ public unsafe class GroundPingView : IPluginUIView
         this.gameGui = gameGui;
         this.textureProvider = textureProvider;
         this.keyState = keyState;
+        this.addonLifecycle = addonLifecycle;
+        this.addonEventManager = addonEventManager;
+        this.dataManager = dataManager;
         this.inputEventSource = inputEventSource;
         this.configuration = configuration;
         this.mapManager = mapManager;
         this.logger = logger;
+
+        //XivAlexander will crash if an ExcelSheet instance is accessed outside of the thread it is created in.
+        this.statusSheet = new StatusSheet(dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(clientState.ClientLanguage));
+        if (this.statusSheet.Count == 0)
+        {
+            this.logger.Error("Could not load Status Excel Sheet. UI pings will not work.");
+        }
 
         this.inputEventSource.SubscribeToKeyDown(args =>
         {
@@ -79,10 +115,86 @@ public unsafe class GroundPingView : IPluginUIView
                 this.keyState.IsVirtualKeyValid(this.configuration.QuickPingKeybind) &&
                 this.keyState.GetRawValue(this.configuration.QuickPingKeybind) > 0)
             {
-                createPingOnLeftMouseUp = true;
+                if (ImGui.IsWindowHovered(ImGuiHoveredFlags.AnyWindow))
+                {
+                    return;
+                }
+
+                var collisionNode = AtkStage.Instance()->AtkCollisionManager->IntersectingCollisionNode;
+                if (collisionNode != null && !collisionNode->NodeFlags.HasFlag(NodeFlags.UseDepthBasedPriority))
+                {
+                    this.logger.Info("Mouse over collision node {0}", ((nint)collisionNode).ToString("X"));
+
+                    // Statuses here are sorted first by PartyListPriority, and then by time-acquired
+                    //foreach (var statusId in AgentHUD.Instance()->Status->StatusIds)
+                    //{
+                    //    if (statusId == 0) { continue; }
+                    //    this.logger.Info("AgentHUD: Status id {0}", statusId);
+                    //    if (this.statusSheet.TryGetStatusById(statusId, out var status))
+                    //    {
+                    //        this.logger.Info("AgentHUD: Status {0}", JsonConvert.SerializeObject(status).ToString());
+                    //    }
+                    //}
+                    // Same order as HUDAgent, doesn't provide extra info
+                    //HudNumberArray.Instance()->StatusIconIds
+                    // Seemingly random statuses, not useful
+                    //Hud2NumberArray.Instance()->TargetStatusIconIds
+
+                    // On the UI, own statuses are always sorted by PartyListPriority then time-acquired
+                    // _StatusCustom0 contains Enhancements, which have StatusCategory 1, CanIncreaseRewards 0
+                    // _StatusCustom1 contains Enfeeblements, which have StatusCategory 2
+                    // _StatusCustom2 contains Other, which have StatusCategory 1, CanIncreaseRewards 1
+                    // _StatusCustom3 contains Conditional Enhancements, which have StatusCategory 1, CanIncreaseRewards 2
+                    // If _StatusCustom3 does not exist, statuses that would normally go there go to _StatusCustom0 instead
+
+                    if (TryGetStatusNameOfCollisionNode(collisionNode, out var name))
+                    {
+                        this.logger.Info("Collision node is for status {0}", name!);
+                        chatGui.Print($"Status: {name}");
+                    }
+
+                    // The PartyMembers array always has 10 slots, but accessing an index at or above PartyMemberCount
+                    // will crash XivAlexander
+                    for(var i = 0; i < AgentHUD.Instance()->PartyMemberCount; i++)
+                    {
+                        var partyMember = AgentHUD.Instance()->PartyMembers[i];
+                        // These include Other statuses
+                        // These seem randomly sorted, but statuses with the same PartyListPriority are
+                        // sorted relative to each other
+                        foreach (var status in partyMember.Object->StatusManager.Status)
+                        {
+                            if (status.StatusId == 0) { continue; }
+                            this.statusSheet.TryGetStatusById(status.StatusId, out var s);
+                            this.logger.Info("Party member {0}, index {1}, has status {2}",
+                               partyMember.Object->NameString, partyMember.Index, JsonConvert.SerializeObject(s).ToString());
+                        }
+                    }
+
+                    // IClientState.LocalPlayer must be accessed in a Framework thread (or else XivAlexander will crash)
+                    //framework.Run(() =>
+                    //{
+                    //    if (this.clientState.LocalPlayer != null)
+                    //    {
+                    //        // These statuses are sorted in time-acquired-order
+                    //        for (var i = 0; i < this.clientState.LocalPlayer.StatusList.Length; i++)
+                    //        {
+                    //            var playerStatus = this.clientState.LocalPlayer.StatusList[i];
+                    //            if (playerStatus != null && playerStatus.StatusId > 0 &&
+                    //                this.statusSheet.TryGetStatusById(playerStatus.StatusId, out var status))
+                    //            {
+                    //                this.logger.Info("Player has status with index {0}, id {1}, name {2}, icon {3}", i, playerStatus.StatusId, status.Name, status.Icon);
+                    //            }
+                    //        }
+                    //    }
+                    //    // IGameGui.HoveredAction does not update to 0 when not hovering over anything
+                    //});
+                    return;
+                }
+
                 // Both lines are needed to consistently capture mouse input
                 ImGui.GetIO().WantCaptureMouse = true;
                 ImGui.SetNextFrameWantCaptureMouse(true);
+                createPingOnLeftMouseUp = true;
             }
         });
         this.inputEventSource.SubscribeToKeyUp(args =>
@@ -92,7 +204,91 @@ public unsafe class GroundPingView : IPluginUIView
                 leftMouseUpThisFrame = true;
             }
         });
+
+        //this.gameGui.HoveredActionChanged += OnHoveredActionChanged;
+        //this.addonLifecycle.RegisterListener(AddonEvent.PostDraw, OnAddonEvent);
     }
+
+    private bool TryGetStatusNameOfCollisionNode(AtkCollisionNode* collisionNode, out string? name)
+    {
+        name = null;
+        if (collisionNode == null) { return false; }
+        //if (this.clientState.LocalPlayer == null) { return false; }
+
+        var imageNode = collisionNode->GetAsAtkImageNode();
+        if (imageNode == null) { return false; }
+
+        var componentNode = collisionNode->ParentNode;
+        if (componentNode == null) { return false; }
+
+        // Found through testing: _StatusCustom component nodes are of Type 1001
+        if ((ushort)componentNode->Type != 1001) { return false; }
+
+        var statusSheet = this.dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(clientState.ClientLanguage);
+        if (statusSheet == null)
+        {
+            this.logger.Error("Could not load Status Excel Sheet. UI pings will not work.");
+            return false;
+        }
+
+        var partsList = imageNode->PartsList; if (partsList == null) { return false; }
+        var parts = partsList->Parts; if (parts == null) { return false; }
+        var uldAsset = parts->UldAsset; if (uldAsset == null) { return false; }
+        var resource = uldAsset->AtkTexture.Resource; if (resource == null) { return false; }
+        var iconId = resource->IconId;
+        this.logger.Info("Collision node icon id is {0}", iconId);
+        if (this.statusSheet.TryGetStatusByIcon(iconId, out var status))
+        {
+            this.logger.Info("Collision node status id is {0}", status.Id);
+            name = status.Name;
+            return true;
+        }
+
+        return false;
+    }
+
+    public void Dispose()
+    {
+        //this.gameGui.HoveredActionChanged -= OnHoveredActionChanged;
+        //this.addonLifecycle.UnregisterListener(OnAddonEvent);
+        //foreach (var handle in this.addonEventHandles.Values)
+        //{
+        //    this.addonEventManager.RemoveEvent(handle);
+        //}
+        GC.SuppressFinalize(this);
+    }
+
+    //private void OnHoveredActionChanged(object? sender, HoveredAction hoveredAction)
+    //{
+    //    this.logger.Info("Hovered over action changed to {0}, {1}", this.gameGui.HoveredAction.ActionID, this.gameGui.HoveredAction.ActionKind);
+    //}
+
+    //private void OnAddonEvent(AddonEvent type, AddonArgs args)
+    //{
+    //    var addon = (AtkUnitBase*)args.Addon;
+
+    //    var iconTextNode = addon->GetComponentByNodeId(2);
+    //    if (iconTextNode == null) { return; }
+
+    //    var imageNode = iconTextNode->GetImageNodeById(3);
+    //    if (imageNode == null) { return; }
+
+    //    if (!addonEventHandles.ContainsKey((nint)imageNode))
+    //    {
+    //        var handle = this.addonEventManager.AddEvent((nint)addon, (nint)imageNode, AddonEventType.MouseOver, OnMouseOver);
+    //        if (handle != null)
+    //        {
+    //            addonEventHandles.Add((nint)imageNode, handle);
+    //        }
+    //    }
+    //}
+
+    //private void OnMouseOver(AddonEventType type, IntPtr addonPtr, IntPtr nodePtr)
+    //{
+    //    var addon = (AtkUnitBase*)addonPtr;
+    //    var node = (AtkResNode*)nodePtr;
+    //    this.logger.Info("Mouse over addon {0}, node {1}", addon->NameString, nodePtr.ToString());
+    //}
 
     public void Draw()
     {
