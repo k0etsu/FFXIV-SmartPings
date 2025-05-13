@@ -205,7 +205,7 @@ public unsafe class XivHudNodeMap
 
         foreach (var n in this.collisionNodeMap)
         {
-            this.logger.Info("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
+            this.logger.Trace("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
         }
     }
 

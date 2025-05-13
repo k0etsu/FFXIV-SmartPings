@@ -1,4 +1,5 @@
 ﻿using AsyncAwaitBestPractices;
+using Dalamud.Game.Text;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using SmartPings.Extensions;
@@ -52,6 +53,7 @@ public class ServerConnection : IDisposable
     private readonly IClientState clientState;
     private readonly IObjectTable objectTable;
     private readonly IFramework framework;
+    private readonly IChatGui chatGui;
     private readonly MapManager mapManager;
     private readonly Lazy<GroundPingPresenter> groundPingPresenter;
     private readonly ILogger logger;
@@ -66,6 +68,7 @@ public class ServerConnection : IDisposable
         IClientState clientState,
         IObjectTable objectTable,
         IFramework framework,
+        IChatGui chatGui,
         MapManager mapManager,
         Lazy<GroundPingPresenter> groundPingPresenter,
         ILogger logger)
@@ -73,6 +76,7 @@ public class ServerConnection : IDisposable
         this.clientState = clientState;
         this.objectTable = objectTable;
         this.framework = framework;
+        this.chatGui = chatGui;
         this.mapManager = mapManager;
         this.groundPingPresenter = groundPingPresenter;
         this.logger = logger;
@@ -174,10 +178,7 @@ public class ServerConnection : IDisposable
 
     public void SendGroundPing(GroundPing ping)
     {
-        if (this.Channel == null || !this.Channel.Connected)
-        {
-            return;
-        }
+        if (this.Channel == null || !this.Channel.Connected) { return; }
 
         this.Channel.SendAsync(new ServerMessage.Payload
         {
@@ -193,6 +194,21 @@ public class ServerConnection : IDisposable
                 worldPositionZ = ping.WorldPosition.Z,
             }
         }).SafeFireAndForget(ex => this.logger.Error(ex.ToString()));
+    }
+
+    public void SendChatMessage(XivChatEntry chatEntry)
+    {
+        if (this.Channel == null || !this.Channel.Connected) { return; }
+
+        this.Channel.SendAsync(new ServerMessage.Payload
+        {
+            action = ServerMessage.Payload.Action.SendChatMessage,
+            chatMessagePayload = new ServerMessage.Payload.ChatMessagePayload
+            {
+                chatType = chatEntry.Type ?? XivChatType.None,
+                message = chatEntry.MessageBytes,
+            }
+        });
     }
 
     private IEnumerable<string> GetOtherPlayerNamesInInstance()
@@ -282,13 +298,13 @@ public class ServerConnection : IDisposable
             message = response.GetValue<ServerMessage>();
             payload = message.payload;
         }
-        catch(Exception e)
+        catch (Exception e)
         {
             this.logger.Error(e.ToString());
             return;
         }
 
-        switch(payload.action)
+        switch (payload.action)
         {
             case ServerMessage.Payload.Action.UpdatePlayersInRoom:
                 this.playersInRoom = payload.players;
@@ -296,6 +312,10 @@ public class ServerConnection : IDisposable
             case ServerMessage.Payload.Action.AddGroundPing:
                 AddGroundPing(payload.groundPingPayload);
                 break;
+            case ServerMessage.Payload.Action.SendChatMessage:
+                PrintChatMessage(payload.chatMessagePayload);
+                break;
+
         }
     }
 
@@ -315,5 +335,15 @@ public class ServerConnection : IDisposable
             },
         };
         this.groundPingPresenter.Value.GroundPings.AddLast(ping);
+    }
+
+    private void PrintChatMessage(ServerMessage.Payload.ChatMessagePayload payload)
+    {
+        var xivMsg = new XivChatEntry
+        {
+            Type = payload.chatType,
+            MessageBytes = payload.message
+        };
+        this.chatGui.Print(xivMsg);
     }
 }

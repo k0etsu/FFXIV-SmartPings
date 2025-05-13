@@ -6,6 +6,7 @@ using ECommons.Automation;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using SmartPings.Log;
+using SmartPings.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,11 +15,18 @@ namespace SmartPings;
 
 public unsafe class GuiPingHandler
 {
+    private const ushort BLUE = 542;
+    private const ushort LIGHT_BLUE = 529;
+    private const ushort YELLOW = 25;
+    private const ushort GREEN = 43;
+    private const ushort RED = 518;
+
     private readonly IChatGui chatGui;
     private readonly IFramework framework;
     private readonly Chat chat;
     private readonly XivHudNodeMap hudNodeMap;
     private readonly Configuration configuration;
+    private readonly ServerConnection serverConnection;
     private readonly ILogger logger;
 
     private readonly StatusSheet statusSheet;
@@ -32,6 +40,7 @@ public unsafe class GuiPingHandler
         Chat chat,
         XivHudNodeMap hudNodeMap,
         Configuration configuration,
+        ServerConnection serverConnection,
         ILogger logger)
     {
         this.chatGui = chatGui;
@@ -39,6 +48,7 @@ public unsafe class GuiPingHandler
         this.chat = chat;
         this.hudNodeMap = hudNodeMap;
         this.configuration = configuration;
+        this.serverConnection = serverConnection;
         this.logger = logger;
 
         //XivAlexander will crash if an ExcelSheet instance is accessed outside of the thread it is created in.
@@ -62,20 +72,25 @@ public unsafe class GuiPingHandler
         if (TryGetStatusOfCollisionNode(collisionNode, out var foundStatus))
         {
             var msg = new SeStringBuilder();
+
+            // Target name
             var localPlayerName = GetLocalPlayerName();
             if (localPlayerName != foundStatus.OwnerName)
             {
-                msg.AddUiForeground($"{foundStatus.OwnerName}: ", 35);
+                msg.AddUiForeground($"{foundStatus.OwnerName}: ", LIGHT_BLUE);
             }
-            msg.AddUiForeground($"{foundStatus.Name}", 25);
 
+            // Status name
+            msg.AddUiForeground($"{foundStatus.Name}", foundStatus.IsEnfeeblement ? RED : YELLOW);
+
+            // Timer
             if (foundStatus.RemainingTime > 0)
             {
-                msg.AddUiForeground(" - ", 25);
+                msg.AddUiForeground(" - ", YELLOW);
                 var remainingTime = foundStatus.RemainingTime >= 1 ?
                     MathF.Floor(foundStatus.RemainingTime).ToString() :
                     foundStatus.RemainingTime.ToString("F1");
-                msg.AddUiForeground($"{remainingTime}s", 43);
+                msg.AddUiForeground($"{remainingTime}s", GREEN);
             }
 
             if (this.configuration.SendGuiPingsToXivChat)
@@ -90,7 +105,7 @@ public unsafe class GuiPingHandler
             if (this.configuration.SendGuiPingsToCustomServer)
             {
                 msg = new SeStringBuilder()
-                    .AddUiForeground($"({localPlayerName}) ", 35)
+                    .AddUiForeground($"({localPlayerName}) ", BLUE)
                     .Append(msg.Build());
 
                 var xivMsg = new XivChatEntry
@@ -99,6 +114,8 @@ public unsafe class GuiPingHandler
                     Message = msg.Build(),
                 };
                 this.chatGui.Print(xivMsg);
+
+                this.serverConnection.SendChatMessage(xivMsg);
             }
         }
 
@@ -245,7 +262,7 @@ public unsafe class GuiPingHandler
         return false;
     }
 
-    private bool TryGetStatus(System.Span<FFXIVClientStructs.FFXIV.Client.Game.Status> allStatuses, StatusType type, uint index,
+    private bool TryGetStatus(Span<FFXIVClientStructs.FFXIV.Client.Game.Status> allStatuses, StatusType type, uint index,
         out Status status)
     {
         status = default;

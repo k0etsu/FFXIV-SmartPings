@@ -58,8 +58,6 @@ public class GroundPingView : IPluginUIView, IDisposable
         IAddonLifecycle addonLifecycle,
         IAddonEventManager addonEventManager,
         IDataManager dataManager,
-        IFramework framework,
-        IChatGui chatGui,
         InputEventSource inputEventSource,
         Configuration configuration,
         MapManager mapManager,

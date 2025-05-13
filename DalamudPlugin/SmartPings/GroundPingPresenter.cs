@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using SmartPings.Extensions;
 using SmartPings.Network;
 using SmartPings.UI.Presenter;
 using SmartPings.UI.View;
