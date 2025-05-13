@@ -3,8 +3,6 @@ using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin;
 using NLog;
 using System;
-using System.Collections.Generic;
-using WindowsInput.Events;
 
 namespace SmartPings
 {
@@ -23,6 +21,9 @@ namespace SmartPings
         public bool EnablePingInput { get; set; } = true;
         public VirtualKey PingKeybind { get; set; } = VirtualKey.G;
         public VirtualKey QuickPingKeybind { get; set; } = VirtualKey.CONTROL;
+
+        public bool SendGuiPingsToCustomServer { get; set; } = true;
+        public bool SendGuiPingsToXivChat { get; set; }
 
         public float MasterVolume { get; set; } = 2.0f;
 

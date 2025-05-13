@@ -1,6 +1,8 @@
 ﻿using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using SmartPings.Log;
+using System;
 using System.Collections.Generic;
 
 namespace SmartPings;
@@ -57,12 +59,16 @@ public unsafe class XivHudNodeMap
 
     public IReadOnlyDictionary<nint, HudElement> CollisionNodeMap => this.collisionNodeMap;
 
-    public bool IsLoaded => this.CollisionNodeMap.Count > 0;
-
     private readonly IGameGui gameGui;
     private readonly ILogger logger;
 
     private readonly Dictionary<nint, HudElement> collisionNodeMap = [];
+
+    private bool enhancementsLoaded;
+    private bool enfeeblementsLoaded;
+    private bool otherLoaded;
+    private bool conditionalEnhancementsLoaded;
+    private int partyListIndicesLoaded;
 
     public XivHudNodeMap(
         IGameGui gameGui,
@@ -74,42 +80,158 @@ public unsafe class XivHudNodeMap
 
     public void Load()
     {
-        this.collisionNodeMap.Clear();
-
-        var statusEnhancements = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom0");
-        if (statusEnhancements == null)
+        // Enhancements
+        if (!this.enhancementsLoaded)
         {
-            this.logger.Error("Could not load _StatusCustom0 addon.");
+            var statusEnhancements = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom0");
+            if (statusEnhancements == null)
+            {
+                this.logger.Error("Could not load _StatusCustom0 addon.");
+                Unload();
+                return;
+            }
+            for (uint i = 2; i <= 21; i++)
+            {
+                var componentNode = statusEnhancements->GetComponentByNodeId(i);
+                if (componentNode == null || componentNode->AtkResNode == null) { continue; }
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
+                {
+                    HudSection = HudSection.StatusEnhancements,
+                    Index = i - 2,
+                });
+
+            }
+            this.enhancementsLoaded = true;
+        }
+
+        // Enfeeblements
+        if (!this.enfeeblementsLoaded)
+        {
+            var statusEnfeeblements = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom1");
+            if (statusEnfeeblements == null)
+            {
+                this.logger.Error("Could not load _StatusCustom1 addon.");
+                Unload();
+                return;
+            }
+            for (uint i = 2; i <= 21; i++)
+            {
+                var componentNode = statusEnfeeblements->GetComponentByNodeId(i);
+                if (componentNode == null || componentNode->AtkResNode == null) { continue; }
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
+                {
+                    HudSection = HudSection.StatusEnfeeblements,
+                    Index = i - 2,
+                });
+            }
+            this.enfeeblementsLoaded = true;
+        }
+
+        // Other
+        if (!this.otherLoaded)
+        {
+            var statusOther = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom2");
+            if (statusOther == null)
+            {
+                this.logger.Error("Could not load _StatusCustom2 addon.");
+                Unload();
+                return;
+            }
+            for (uint i = 2; i <= 21; i++)
+            {
+                var componentNode = statusOther->GetComponentByNodeId(i);
+                if (componentNode == null || componentNode->AtkResNode == null) { continue; }
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
+                {
+                    HudSection = HudSection.StatusOther,
+                    Index = i - 2,
+                });
+            }
+            this.otherLoaded = true;
+        }
+
+        // Conditional Enhancements
+        if (!this.conditionalEnhancementsLoaded)
+        {
+            var statusConditionalEnhancements = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom3");
+            if (statusConditionalEnhancements == null)
+            {
+                this.logger.Error("Could not load _StatusCustom3 addon.");
+                Unload();
+                return;
+            }
+            for (uint i = 2; i <= 9; i++)
+            {
+                var componentNode = statusConditionalEnhancements->GetComponentByNodeId(i);
+                if (componentNode == null || componentNode->AtkResNode == null) { continue; }
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
+                {
+                    HudSection = HudSection.StatusConditionalEnhancements,
+                    Index = i - 2,
+                });
+            }
+            this.conditionalEnhancementsLoaded = true;
+        }
+
+        // Party List
+        var partyList = (AddonPartyList*)gameGui.GetAddonByName("_PartyList");
+        if (partyList == null)
+        {
+            this.logger.Error("Could not load _PartyList addon.");
+            Unload();
             return;
         }
-        for (uint i = 2; i <= 21; i++)
+        for (var i = 0; i < 8; i++)
         {
-            var componentNode = statusEnhancements->GetComponentByNodeId(i);
-            if (componentNode == null || componentNode->AtkResNode == null) { continue; }
-            collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
+            if (this.partyListIndicesLoaded > i) { continue; }
+
+            var partyMember = partyList->PartyMembers[i];
+            // PartyMember StatusIcon nodes are not created until the party member exists,
+            // so this load will need to be checked every time
+            for (var j = 0; j < 10; j++)
             {
-                HudSection = HudSection.StatusEnhancements,
-                Index = i - 2,
-            });
+                var statusIconNode = partyMember.StatusIcons[j];
+                if (statusIconNode.Value == null || statusIconNode.Value->AtkResNode == null) { continue; }
+                this.collisionNodeMap.TryAdd((nint)statusIconNode.Value->AtkResNode, new()
+                {
+                    HudSection = HudSection.PartyList1Status + i,
+                    Index = (uint)j,
+                });
+
+                // If just one status icon node exists, we assume all nodes are loaded
+                this.partyListIndicesLoaded = Math.Max(i + 1, this.partyListIndicesLoaded);
+            }
         }
 
-        foreach (var n in collisionNodeMap)
+        foreach (var n in this.collisionNodeMap)
         {
             this.logger.Info("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
         }
     }
 
+    public void Unload()
+    {
+        this.collisionNodeMap.Clear();
+        this.enhancementsLoaded = false;
+        this.enfeeblementsLoaded = false;
+        this.otherLoaded = false;
+        this.conditionalEnhancementsLoaded = false;
+        this.partyListIndicesLoaded = 0;
+    }
+
     public bool TryGetAsHudElement(nint nodeAddress, out HudElement hudElement)
     {
+        Load();
         return this.CollisionNodeMap.TryGetValue(nodeAddress, out hudElement);
     }
 
     public bool TryGetAsHudElement(AtkResNode* nodePtr, out HudElement hudElement)
     {
+        Load();
         return this.CollisionNodeMap.TryGetValue((nint)nodePtr, out hudElement);
     }
 
-    public bool ConditionalEnhancementsEnabled()
+    public bool IsConditionalEnhancementsEnabled()
     {
         var addon = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom3");
         if (addon == null) { return false; }

@@ -33,12 +33,22 @@ public struct Status
     public bool Invisibility;
 
     public float RemainingTime;
+    public string OwnerName;
+
+    public readonly bool IsEnhancement => StatusCategory == 1 && CanIncreaseRewards == 0;
+    public readonly bool IsEnfeeblement => StatusCategory == 2;
+    public readonly bool IsOther => StatusCategory == 1 && CanIncreaseRewards == 1;
+    public readonly bool IsConditionalEnhancement => StatusCategory == 1 && CanIncreaseRewards == 2;
 }
 
 public enum StatusType
 {
-    Enhancement = 0,
-    Enfeeblement = 1,
-    Other = 2,
-    ConditionalEnhancement = 3,
+    None = 0,
+
+    SelfEnhancement = 1,
+    SelfEnfeeblement = 2,
+    SelfOther = 3,
+    SelfConditionalEnhancement = 4,
+
+    PartyListStatus = 10,
 }

@@ -63,7 +63,7 @@ public class GroundPingView : IPluginUIView, IDisposable
         InputEventSource inputEventSource,
         Configuration configuration,
         MapManager mapManager,
-        UiPingHandler uiPingHandler,
+        GuiPingHandler uiPingHandler,
         ILogger logger)
     {
         this.presenter = presenter;

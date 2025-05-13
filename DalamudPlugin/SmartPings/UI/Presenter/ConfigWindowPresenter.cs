@@ -42,6 +42,11 @@ public class ConfigWindowPresenter(
         Bind(this.view.EnablePingInput,
             b => { this.configuration.EnablePingInput = b; this.configuration.Save(); }, this.configuration.EnablePingInput);
 
+        Bind(this.view.SendGuiPingsToCustomServer,
+            b => { this.configuration.SendGuiPingsToCustomServer = b; this.configuration.Save(); }, this.configuration.SendGuiPingsToCustomServer);
+        Bind(this.view.SendGuiPingsToXivChat,
+            b => { this.configuration.SendGuiPingsToXivChat = b; this.configuration.Save(); }, this.configuration.SendGuiPingsToXivChat);
+
         Bind(this.view.MasterVolume,
             f => { this.configuration.MasterVolume = f; this.configuration.Save(); }, this.configuration.MasterVolume);
 

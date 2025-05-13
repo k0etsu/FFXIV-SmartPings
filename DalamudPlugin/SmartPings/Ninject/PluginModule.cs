@@ -1,6 +1,8 @@
-﻿using Dalamud.Interface.Windowing;
+﻿using Dalamud.Game;
+using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using ECommons.Automation;
 using Ninject.Activation;
 using Ninject.Modules;
 using SmartPings.Audio;
@@ -33,7 +35,11 @@ public class PluginModule : NinjectModule
         Bind<IFramework>().ToConstant(PluginInitializer.Framework).InTransientScope();
         Bind<ITextureProvider>().ToConstant(PluginInitializer.TextureProvider).InTransientScope();
         Bind<IKeyState>().ToConstant(PluginInitializer.KeyState).InTransientScope();
+        Bind<ISigScanner>().ToConstant(PluginInitializer.SigScanner).InTransientScope();
         Bind<IPluginLog>().ToConstant(PluginInitializer.Log).InTransientScope();
+
+        // External Libraries (and taken code)
+        Bind<Chat>().ToSelf().InSingletonScope();
 
         // Plugin classes
         Bind<Plugin>().ToSelf().InSingletonScope();
@@ -46,7 +52,7 @@ public class PluginModule : NinjectModule
         Bind<ServerConnection>().ToSelf().InSingletonScope();
         Bind<Spatializer>().ToSelf().InSingletonScope();
         Bind<MapManager>().ToSelf().InSingletonScope();
-        Bind<UiPingHandler>().ToSelf().InSingletonScope();
+        Bind<GuiPingHandler>().ToSelf().InSingletonScope();
         Bind<XivHudNodeMap>().ToSelf().InSingletonScope();
 
         // Views and Presenters

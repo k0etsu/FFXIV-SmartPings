@@ -31,6 +31,9 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
     public IObservable<Keybind> ClearKeybind => clearKeybind.AsObservable();
     private readonly Subject<Keybind> clearKeybind = new();
 
+    public IReactiveProperty<bool> SendGuiPingsToCustomServer { get; } = new ReactiveProperty<bool>();
+    public IReactiveProperty<bool> SendGuiPingsToXivChat { get; } = new ReactiveProperty<bool>();
+
     public IReactiveProperty<float> MasterVolume { get; } = new ReactiveProperty<float>();
 
     public IReactiveProperty<bool> PlayRoomJoinAndLeaveSounds { get; } = new ReactiveProperty<bool>();
@@ -125,6 +128,28 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         //{
         //    this.EnablePingInput.Value = enablePingInput;
         //}
+
+        ImGui.Dummy(new Vector2(0.0f, 5.0f)); // ---------------
+
+        var sendGuiPingsToCustomServer = this.SendGuiPingsToCustomServer.Value;
+        if (ImGui.Checkbox("Send UI pings to joined room", ref sendGuiPingsToCustomServer))
+        {
+            this.SendGuiPingsToCustomServer.Value = sendGuiPingsToCustomServer;
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Sends UI pings as /echo messages to other players in the same plugin room. This avoids sending traceable data to XIV servers.");
+        }
+
+        var sendGuiPingsToXivChat = this.SendGuiPingsToXivChat.Value;
+        if (ImGui.Checkbox("Send UI pings in game chat (!)", ref sendGuiPingsToXivChat))
+        {
+            this.SendGuiPingsToXivChat.Value = sendGuiPingsToXivChat;
+        }
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Sending messages in game chat may be traceable as plugin usage. Use with caution!");
+        }
     }
 
     private void DrawKeybindEdit(Keybind keybind, VirtualKey currentBinding, string label, string? tooltip = null)
