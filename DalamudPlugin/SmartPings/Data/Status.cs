@@ -1,4 +1,4 @@
-﻿namespace SmartPings;
+﻿namespace SmartPings.Data;
 
 public struct Status
 {
@@ -34,6 +34,7 @@ public struct Status
 
     public float RemainingTime;
     public string OwnerName;
+    public bool IsOwnEnhancement;
 
     public readonly bool IsEnhancement => StatusCategory == 1 && CanIncreaseRewards == 0;
     public readonly bool IsEnfeeblement => StatusCategory == 2;

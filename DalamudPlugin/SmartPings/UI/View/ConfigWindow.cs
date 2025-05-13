@@ -11,6 +11,7 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 
@@ -33,6 +34,9 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
 
     public IReactiveProperty<bool> SendGuiPingsToCustomServer { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<bool> SendGuiPingsToXivChat { get; } = new ReactiveProperty<bool>();
+
+    public IObservable<Unit> PrintStatuses => printStatuses.AsObservable();
+    private readonly Subject<Unit> printStatuses = new();
 
     public IReactiveProperty<float> MasterVolume { get; } = new ReactiveProperty<float>();
 
@@ -150,6 +154,16 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         {
             ImGui.SetTooltip("Sending messages in game chat may be traceable as plugin usage. Use with caution!");
         }
+
+#if DEBUG
+        ImGui.Dummy(new Vector2(0.0f, 5.0f)); // ---------------
+
+        ImGui.Text("DEBUG");
+        if (ImGui.Button("Print Statuses"))
+        {
+            this.printStatuses.OnNext(Unit.Default);
+        }
+#endif
     }
 
     private void DrawKeybindEdit(Keybind keybind, VirtualKey currentBinding, string label, string? tooltip = null)

@@ -1,6 +1,9 @@
 ﻿using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Newtonsoft.Json;
 using Reactive.Bindings;
+using SmartPings.Data;
 using SmartPings.Input;
 using SmartPings.Log;
 using SmartPings.UI.View;
@@ -11,16 +14,20 @@ namespace SmartPings.UI.Presenter;
 public class ConfigWindowPresenter(
     ConfigWindow view,
     IFramework framework,
-    Configuration configuration,
+    IDataManager dataManager,
     KeyStateWrapper keyStateWrapper,
+    Configuration configuration,
+    StatusSheet statusSheet,
     ILogger logger) : IPluginUIPresenter, IDisposable
 {
     public IPluginUIView View => this.view;
 
     private readonly ConfigWindow view = view;
     private readonly IFramework framework = framework;
-    private readonly Configuration configuration = configuration;
+    private readonly IDataManager dataManager = dataManager;
     private readonly KeyStateWrapper keyStateWrapper = keyStateWrapper;
+    private readonly Configuration configuration = configuration;
+    private readonly StatusSheet statusSheet = statusSheet;
     private readonly ILogger logger = logger;
 
     private bool keyDownListenerSubscribed;
@@ -87,6 +94,29 @@ public class ConfigWindowPresenter(
                     return;
             }
             this.configuration.Save();
+        });
+
+        this.view.PrintStatuses.Subscribe(_ =>
+        {
+            unsafe
+            {
+                // The PartyMembers array always has 10 slots, but accessing an index at or above PartyMemberCount
+                // will crash XivAlexander
+                for (var i = 0; i < AgentHUD.Instance()->PartyMemberCount; i++)
+                {
+                    var partyMember = AgentHUD.Instance()->PartyMembers[i];
+                    // These include Other statuses
+                    // These seem randomly sorted, but statuses with the same PartyListPriority are
+                    // sorted relative to each other
+                    foreach (var status in partyMember.Object->StatusManager.Status)
+                    {
+                        if (status.StatusId == 0) { continue; }
+                        this.statusSheet.TryGetStatusById(status.StatusId, out var s);
+                        this.logger.Info("Party member {0}, index {1}, has status {2}",
+                           partyMember.Object->NameString, partyMember.Index, JsonConvert.SerializeObject(s).ToString());
+                    }
+                }
+            }
         });
     }
 

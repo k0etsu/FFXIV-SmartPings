@@ -3,9 +3,11 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using ECommons.Automation;
+using Ninject;
 using Ninject.Activation;
 using Ninject.Modules;
 using SmartPings.Audio;
+using SmartPings.Data;
 using SmartPings.Input;
 using SmartPings.Log;
 using SmartPings.Network;
@@ -45,7 +47,6 @@ public class PluginModule : NinjectModule
         Bind<Plugin>().ToSelf().InSingletonScope();
         Bind<IDalamudHook>().To<PluginUIContainer>().InSingletonScope();
         Bind<IDalamudHook>().To<CommandDispatcher>().InSingletonScope();
-        Bind<Configuration>().ToMethod(GetConfiguration).InSingletonScope();
         Bind<InputEventSource>().ToSelf().InSingletonScope();
         Bind<KeyStateWrapper>().ToSelf().InSingletonScope();
         Bind<IAudioDeviceController, AudioDeviceController>().To<AudioDeviceController>().InSingletonScope();
@@ -64,6 +65,10 @@ public class PluginModule : NinjectModule
         Bind<IPluginUIView, ConfigWindow>().To<ConfigWindow>().InSingletonScope();
         Bind<IPluginUIPresenter, ConfigWindowPresenter>().To<ConfigWindowPresenter>().InSingletonScope();
 
+        // Data
+        Bind<Configuration>().ToMethod(GetConfiguration).InSingletonScope();
+        Bind<StatusSheet>().ToMethod(CreateStatusSheet).InSingletonScope();
+
         Bind<ILogger>().To<DalamudLogger>();
         Bind<DalamudLoggerFactory>().ToSelf();
     }
@@ -75,5 +80,19 @@ public class PluginModule : NinjectModule
             ?? new Configuration();
         configuration.Initialize(PluginInitializer.PluginInterface);
         return configuration;
+    }
+
+    private StatusSheet CreateStatusSheet(IContext context)
+    {
+        var dataManager = context.Kernel.Get<IDataManager>();
+        var clientState = context.Kernel.Get<IClientState>();
+        var logger = context.Kernel.Get<ILogger>();
+        //XivAlexander will crash if an ExcelSheet instance is accessed outside of the thread it is created in.
+        var statusSheet = new StatusSheet(dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(clientState.ClientLanguage));
+        if (statusSheet.Count == 0)
+        {
+            logger.Error("Could not load Status Excel Sheet. UI pings will not work.");
+        }
+        return statusSheet;
     }
 }

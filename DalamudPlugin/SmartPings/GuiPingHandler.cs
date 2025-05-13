@@ -5,6 +5,7 @@ using Dalamud.Utility;
 using ECommons.Automation;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using SmartPings.Data;
 using SmartPings.Log;
 using SmartPings.Network;
 using System;
@@ -25,11 +26,11 @@ public unsafe class GuiPingHandler
     private readonly IFramework framework;
     private readonly Chat chat;
     private readonly XivHudNodeMap hudNodeMap;
-    private readonly Configuration configuration;
     private readonly ServerConnection serverConnection;
+    private readonly Configuration configuration;
+    private readonly StatusSheet statusSheet;
     private readonly ILogger logger;
 
-    private readonly StatusSheet statusSheet;
     private readonly List<Status> statuses = [];
 
     public GuiPingHandler(
@@ -39,24 +40,19 @@ public unsafe class GuiPingHandler
         IFramework framework,
         Chat chat,
         XivHudNodeMap hudNodeMap,
-        Configuration configuration,
         ServerConnection serverConnection,
+        Configuration configuration,
+        StatusSheet statusSheet,
         ILogger logger)
     {
         this.chatGui = chatGui;
         this.framework = framework;
         this.chat = chat;
         this.hudNodeMap = hudNodeMap;
-        this.configuration = configuration;
         this.serverConnection = serverConnection;
+        this.configuration = configuration;
+        this.statusSheet = statusSheet;
         this.logger = logger;
-
-        //XivAlexander will crash if an ExcelSheet instance is accessed outside of the thread it is created in.
-        this.statusSheet = new StatusSheet(dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(clientState.ClientLanguage));
-        if (this.statusSheet.Count == 0)
-        {
-            this.logger.Error("Could not load Status Excel Sheet. UI pings will not work.");
-        }
     }
 
     public bool TryPingUi()
@@ -95,10 +91,11 @@ public unsafe class GuiPingHandler
 
             if (this.configuration.SendGuiPingsToXivChat)
             {
+                var msgString = msg.ToString();
                 this.framework.Run(() =>
                 {
                     // This method must be called on a framework thread or else XIV will crash.
-                    this.chat.SendMessage(msg.ToString());
+                    this.chat.SendMessage(msgString);
                 });
             }
 
@@ -119,23 +116,6 @@ public unsafe class GuiPingHandler
             }
         }
 
-        //// The PartyMembers array always has 10 slots, but accessing an index at or above PartyMemberCount
-        //// will crash XivAlexander
-        //for (var i = 0; i < AgentHUD.Instance()->PartyMemberCount; i++)
-        //{
-        //    var partyMember = AgentHUD.Instance()->PartyMembers[i];
-        //    // These include Other statuses
-        //    // These seem randomly sorted, but statuses with the same PartyListPriority are
-        //    // sorted relative to each other
-        //    foreach (var status in partyMember.Object->StatusManager.Status)
-        //    {
-        //        if (status.StatusId == 0) { continue; }
-        //        this.statusSheet.TryGetStatusById(status.StatusId, out var s);
-        //        this.logger.Info("Party member {0}, index {1}, has status {2}",
-        //           partyMember.Object->NameString, partyMember.Index, JsonConvert.SerializeObject(s).ToString());
-        //    }
-        //}
-
         return true;
     }
 
@@ -149,6 +129,17 @@ public unsafe class GuiPingHandler
             return AgentHUD.Instance()->PartyMembers[0].Name.ExtractText();
         }
         return string.Empty;
+    }
+
+    private uint GetLocalPlayerId()
+    {
+        // Accessing IClientState in a non-framework thread will crash XivAlexander, so this is a
+        // different way of getting the local player id
+        if (0 < AgentHUD.Instance()->PartyMemberCount)
+        {
+            return AgentHUD.Instance()->PartyMembers[0].EntityId;
+        }
+        return default;
     }
 
     // To determine what status was clicked on, we need to go from AtkImageNode (inherits AtkCollisionNode) to Status information.
@@ -273,10 +264,18 @@ public unsafe class GuiPingHandler
 
         this.statuses.Clear();
 
+        var isConditionalEnhancementsEnabled = this.hudNodeMap.IsConditionalEnhancementsEnabled();
+        var isOwnEnhancementsPrioritized = this.hudNodeMap.IsOwnEnhancementsPrioritized();
+        var isOthersEnhancementsDisplayedInOthers = this.hudNodeMap.IsOthersEnhancementsDisplayedInOthers();
+        var localPlayerId = GetLocalPlayerId();
+
         // Fill status list with relevant statuses to sort
         foreach (var s in allStatuses)
         {
+            if (s.StatusId == 0) { continue; }
             if (!this.statusSheet.TryGetStatusById(s.StatusId, out var statusInfo)) { continue; }
+
+            statusInfo.IsOwnEnhancement = s.SourceId == localPlayerId;
 
             // Intentionally putting switch inside foreach instead of outside for code clarity
             switch (type)
@@ -284,10 +283,12 @@ public unsafe class GuiPingHandler
                 case StatusType.SelfEnhancement:
                     // Conditional Enhancements are treated as Enhancements if their Addon is disabled
                     if (!statusInfo.IsEnhancement &&
-                        (!statusInfo.IsConditionalEnhancement || this.hudNodeMap.IsConditionalEnhancementsEnabled()))
+                        (!statusInfo.IsConditionalEnhancement || isConditionalEnhancementsEnabled))
                     {
                         continue;
                     }
+                    // Enhancements applied by others are treated as Other if the HUD config option is set
+                    if (isOthersEnhancementsDisplayedInOthers && !statusInfo.IsOwnEnhancement) { continue; }
                     break;
 
                 case StatusType.SelfEnfeeblement:
@@ -295,7 +296,12 @@ public unsafe class GuiPingHandler
                     break;
 
                 case StatusType.SelfOther:
-                    if (!statusInfo.IsOther) { continue; }
+                    // Enhancements applied by others are treated as Other if the HUD config option is set
+                    if (!statusInfo.IsOther &&
+                        (!isOthersEnhancementsDisplayedInOthers || statusInfo.IsOwnEnhancement))
+                    {
+                        continue;
+                    }
                     break;
 
                 case StatusType.SelfConditionalEnhancement:
@@ -313,6 +319,14 @@ public unsafe class GuiPingHandler
         }
 
         var sortedStatuses = this.statuses.OrderByDescending(s => s.PartyListPriority);
+        if (isOwnEnhancementsPrioritized && type == StatusType.SelfEnhancement)
+        {
+            sortedStatuses = sortedStatuses.ThenByDescending(s => s.IsOwnEnhancement);
+        }
+        if (isOthersEnhancementsDisplayedInOthers && type == StatusType.SelfOther)
+        {
+            sortedStatuses = sortedStatuses.ThenBy(s => s.IsOther);
+        }
 
         var i = 0;
         foreach (var s in sortedStatuses)

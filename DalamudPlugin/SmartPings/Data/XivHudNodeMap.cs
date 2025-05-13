@@ -5,7 +5,7 @@ using SmartPings.Log;
 using System;
 using System.Collections.Generic;
 
-namespace SmartPings;
+namespace SmartPings.Data;
 
 public unsafe class XivHudNodeMap
 {
@@ -236,5 +236,19 @@ public unsafe class XivHudNodeMap
         var addon = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom3");
         if (addon == null) { return false; }
         return addon->IsVisible;
+    }
+
+    public bool IsOwnEnhancementsPrioritized()
+    {
+        var addon = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom0");
+        if (addon == null) { return false; }
+        return addon->Param == 256;
+    }
+
+    public bool IsOthersEnhancementsDisplayedInOthers()
+    {
+        var addon = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom0");
+        if (addon == null) { return false; }
+        return addon->Param == 512;
     }
 }

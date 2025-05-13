@@ -1,7 +1,7 @@
 ﻿using Dalamud.Utility;
 using System.Collections.Generic;
 
-namespace SmartPings;
+namespace SmartPings.Data;
 
 public readonly struct StatusSheet
 {
