@@ -1,6 +1,5 @@
 // IMPORTS
 import pino from "pino"
-import crypto from "crypto";
 import http from "http";
 import express from "express";
 import basicAuth from "express-basic-auth";
@@ -278,7 +277,10 @@ io.on("connection", (socket) => {
       socket.to(socket.room).emit("message", {
         from: disconnectingPeer.peerId,
         target: "all",
-        payload: { action: "close", message: "Peer has left the signaling server" },
+        payload: {
+          action: Action.Close,
+          message: "Peer has left the signaling server"
+        },
       });
       // remove disconnecting peer from connections
       delete connections[disconnectingPeer.peerId];

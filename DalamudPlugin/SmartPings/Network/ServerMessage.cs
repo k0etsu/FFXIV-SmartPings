@@ -12,6 +12,8 @@ public struct ServerMessage
             UpdatePlayersInRoom = 1,
             AddGroundPing = 2,
             SendChatMessage = 3,
+
+            Close = 10,
         }
 
         public struct GroundPingPayload

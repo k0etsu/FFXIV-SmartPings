@@ -233,18 +233,12 @@ public unsafe class GuiPingHandler
                 var partyMemberIndex = hudElement.HudSection - XivHudNodeMap.HudSection.PartyList1Status;
                 if (partyMemberIndex < AgentHUD.Instance()->PartyMemberCount)
                 {
-                    // Find party member by UI index
-                    foreach (var partyMember in AgentHUD.Instance()->PartyMembers)
+                    var partyMember = AgentHUD.Instance()->PartyMembers[partyMemberIndex];
+                    var statuses = partyMember.Object->StatusManager.Status;
+                    if (TryGetStatus(statuses, StatusType.PartyListStatus, hudElement.Index, out status))
                     {
-                        if (partyMember.Index == partyMemberIndex)
-                        {
-                            var statuses = partyMember.Object->StatusManager.Status;
-                            if (TryGetStatus(statuses, StatusType.PartyListStatus, hudElement.Index, out status))
-                            {
-                                status.OwnerName = partyMember.Name.ExtractText();
-                                return true;
-                            }
-                        }
+                        status.OwnerName = partyMember.Name.ExtractText();
+                        return true;
                     }
                 }
                 break;

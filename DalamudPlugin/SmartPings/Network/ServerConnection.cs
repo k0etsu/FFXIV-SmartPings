@@ -315,7 +315,6 @@ public class ServerConnection : IDisposable
             case ServerMessage.Payload.Action.SendChatMessage:
                 PrintChatMessage(payload.chatMessagePayload);
                 break;
-
         }
     }
 

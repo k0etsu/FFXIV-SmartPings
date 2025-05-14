@@ -198,8 +198,12 @@ public unsafe class XivHudNodeMap
                     Index = (uint)j,
                 });
 
-                // If just one status icon node exists, we assume all nodes are loaded
-                this.partyListIndicesLoaded = Math.Max(i + 1, this.partyListIndicesLoaded);
+                // If more than one status icon node exists, we assume all nodes are loaded
+                // This is because sometimes only 1 icon node gets loaded
+                if (j > 0)
+                {
+                    this.partyListIndicesLoaded = Math.Max(i + 1, this.partyListIndicesLoaded);
+                }
             }
         }
 
