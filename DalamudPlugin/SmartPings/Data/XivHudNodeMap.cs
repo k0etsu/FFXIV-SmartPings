@@ -63,12 +63,12 @@ public unsafe class XivHudNodeMap
     private readonly ILogger logger;
 
     private readonly Dictionary<nint, HudElement> collisionNodeMap = [];
+    private readonly List<nint> partyListStatusNodes = [];
 
     private bool enhancementsLoaded;
     private bool enfeeblementsLoaded;
     private bool otherLoaded;
     private bool conditionalEnhancementsLoaded;
-    private int partyListIndicesLoaded;
 
     public XivHudNodeMap(
         IGameGui gameGui,
@@ -181,46 +181,48 @@ public unsafe class XivHudNodeMap
             Unload();
             return;
         }
-        for (var i = 0; i < 8; i++)
+        // The status icon nodes in the party list are prone to changing, so load the party list every time
+        // Also, these status icon nodes may not always be in the StatusIcons array, except for the first node
+        foreach(var n in this.partyListStatusNodes)
         {
-            if (this.partyListIndicesLoaded > i) { continue; }
-
-            var partyMember = partyList->PartyMembers[i];
-            // PartyMember StatusIcon nodes are not created until the party member exists,
-            // so this load will need to be checked every time
-            for (var j = 0; j < 10; j++)
-            {
-                var statusIconNode = partyMember.StatusIcons[j];
-                if (statusIconNode.Value == null || statusIconNode.Value->AtkResNode == null) { continue; }
-                this.collisionNodeMap.TryAdd((nint)statusIconNode.Value->AtkResNode, new()
-                {
-                    HudSection = HudSection.PartyList1Status + i,
-                    Index = (uint)j,
-                });
-
-                // If more than one status icon node exists, we assume all nodes are loaded
-                // This is because sometimes only 1 icon node gets loaded
-                if (j > 0)
-                {
-                    this.partyListIndicesLoaded = Math.Max(i + 1, this.partyListIndicesLoaded);
-                }
-            }
+            this.collisionNodeMap.Remove(n);
         }
-
-        foreach (var n in this.collisionNodeMap)
+        this.partyListStatusNodes.Clear();
+        for (var i = 0; i < partyList->PartyMembers.Length && i < 8; i++)
         {
-            this.logger.Trace("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
+            var partyMember = partyList->PartyMembers[i];
+            var statusIconNode = partyMember.StatusIcons[0].Value;
+            uint j = 0;
+            while (statusIconNode != null)
+            {
+                if (statusIconNode->AtkResNode != null)
+                {
+                    var nodePtr = (nint)statusIconNode->AtkResNode;
+                    this.collisionNodeMap.TryAdd(nodePtr, new()
+                    {
+                        HudSection = HudSection.PartyList1Status + i,
+                        Index = j,
+                    });
+                    this.partyListStatusNodes.Add(nodePtr);
+                }
+                var ownerNode = statusIconNode->OwnerNode;
+                if (ownerNode == null) { break; }
+                var nextSiblingNode = ownerNode->NextSiblingNode;
+                if (nextSiblingNode == null) { break; }
+                statusIconNode = (AtkComponentIconText*)nextSiblingNode->GetComponent();
+                j++;
+            }
         }
     }
 
     public void Unload()
     {
         this.collisionNodeMap.Clear();
+        this.partyListStatusNodes.Clear();
         this.enhancementsLoaded = false;
         this.enfeeblementsLoaded = false;
         this.otherLoaded = false;
         this.conditionalEnhancementsLoaded = false;
-        this.partyListIndicesLoaded = 0;
     }
 
     public bool TryGetAsHudElement(nint nodeAddress, out HudElement hudElement)

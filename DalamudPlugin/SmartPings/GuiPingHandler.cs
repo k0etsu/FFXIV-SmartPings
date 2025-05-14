@@ -1,5 +1,6 @@
 ﻿using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using ECommons.Automation;
@@ -11,6 +12,7 @@ using SmartPings.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace SmartPings;
 
@@ -22,13 +24,14 @@ public unsafe class GuiPingHandler
     private const ushort GREEN = 43;
     private const ushort RED = 518;
 
+    private readonly IClientState clientState;
+    private readonly IDataManager dataManager;
     private readonly IChatGui chatGui;
     private readonly IFramework framework;
     private readonly Chat chat;
     private readonly XivHudNodeMap hudNodeMap;
     private readonly ServerConnection serverConnection;
     private readonly Configuration configuration;
-    private readonly StatusSheet statusSheet;
     private readonly ILogger logger;
 
     private readonly List<Status> statuses = [];
@@ -42,16 +45,16 @@ public unsafe class GuiPingHandler
         XivHudNodeMap hudNodeMap,
         ServerConnection serverConnection,
         Configuration configuration,
-        StatusSheet statusSheet,
         ILogger logger)
     {
+        this.clientState = clientState;
+        this.dataManager = dataManager;
         this.chatGui = chatGui;
         this.framework = framework;
         this.chat = chat;
         this.hudNodeMap = hudNodeMap;
         this.serverConnection = serverConnection;
         this.configuration = configuration;
-        this.statusSheet = statusSheet;
         this.logger = logger;
     }
 
@@ -65,56 +68,89 @@ public unsafe class GuiPingHandler
 
         this.logger.Debug("Mouse over collision node {0}", ((nint)collisionNode).ToString("X"));
 
-        if (TryGetStatusOfCollisionNode(collisionNode, out var foundStatus))
+        this.framework.Run(() =>
         {
-            var msg = new SeStringBuilder();
-
-            // Target name
-            var localPlayerName = GetLocalPlayerName();
-            if (localPlayerName != foundStatus.OwnerName)
+            if (TryGetStatusOfCollisionNode(collisionNode, out var foundStatus))
             {
-                msg.AddUiForeground($"{foundStatus.OwnerName}: ", LIGHT_BLUE);
-            }
+                var echoMsg = new SeStringBuilder();
+                var chatMsg = new StringBuilder();
 
-            // Status name
-            msg.AddUiForeground($"{foundStatus.Name}", foundStatus.IsEnfeeblement ? RED : YELLOW);
+                // Source name -------------
+                var localPlayerName = GetLocalPlayerName();
+                echoMsg.AddUiForeground($"({localPlayerName}) ", BLUE);
 
-            // Timer
-            if (foundStatus.RemainingTime > 0)
-            {
-                msg.AddUiForeground(" - ", YELLOW);
-                var remainingTime = foundStatus.RemainingTime >= 1 ?
-                    MathF.Floor(foundStatus.RemainingTime).ToString() :
-                    foundStatus.RemainingTime.ToString("F1");
-                msg.AddUiForeground($"{remainingTime}s", GREEN);
-            }
-
-            if (this.configuration.SendGuiPingsToXivChat)
-            {
-                var msgString = msg.ToString();
-                this.framework.Run(() =>
+                // Target name -------------
+                if (!foundStatus.IsOnSelf)
                 {
+                    echoMsg.AddUiForeground($"{foundStatus.OwnerName}: ", LIGHT_BLUE);
+
+                    chatMsg.Append($"{foundStatus.OwnerName}: ");
+                }
+
+                // Status name --------------
+                echoMsg.AddStatusLink(foundStatus.Id);
+                // This is how status links are normally constructed
+                echoMsg.AddUiForeground(500);
+                echoMsg.AddUiGlow(501);
+                echoMsg.Append(SeIconChar.LinkMarker.ToIconString());
+                echoMsg.AddUiGlowOff();
+                echoMsg.AddUiForegroundOff();
+                if (foundStatus.IsEnfeeblement)
+                {
+                    echoMsg.AddUiForeground(518);
+                    echoMsg.Append(SeIconChar.Debuff.ToIconString());
+                    echoMsg.AddUiForegroundOff();
+                }
+                else
+                {
+                    echoMsg.AddUiForeground(517);
+                    echoMsg.Append(SeIconChar.Buff.ToIconString());
+                    echoMsg.AddUiForegroundOff();
+                }
+                echoMsg.AddUiForeground($"{foundStatus.Name}", foundStatus.IsEnfeeblement ? RED : YELLOW);
+                echoMsg.Append([RawPayload.LinkTerminator]);
+
+                chatMsg.Append("<status>");
+
+                if (foundStatus.MaxStacks > 0)
+                {
+                    echoMsg.AddUiForeground($" x{foundStatus.Stacks}", foundStatus.IsEnfeeblement ? RED : YELLOW);
+
+                    chatMsg.Append($" x{foundStatus.Stacks}");
+                }
+
+                // Timer ---------------
+                if (foundStatus.RemainingTime > 0)
+                {
+                    echoMsg.AddUiForeground(" - ", YELLOW);
+                    var remainingTime = foundStatus.RemainingTime >= 1 ?
+                        MathF.Floor(foundStatus.RemainingTime).ToString() :
+                        foundStatus.RemainingTime.ToString("F1");
+                    echoMsg.AddUiForeground($"{remainingTime}s", GREEN);
+
+                    chatMsg.Append($" - {remainingTime}s");
+                }
+
+                if (this.configuration.SendGuiPingsToXivChat)
+                {
+                    AgentChatLog.Instance()->ContextStatusId = foundStatus.Id;
                     // This method must be called on a framework thread or else XIV will crash.
-                    this.chat.SendMessage(msgString);
-                });
-            }
+                    this.chat.SendMessage(chatMsg.ToString());
+                }
 
-            if (this.configuration.SendGuiPingsToCustomServer)
-            {
-                msg = new SeStringBuilder()
-                    .AddUiForeground($"({localPlayerName}) ", BLUE)
-                    .Append(msg.Build());
-
-                var xivMsg = new XivChatEntry
+                if (this.configuration.SendGuiPingsToCustomServer)
                 {
-                    Type = XivChatType.Echo,
-                    Message = msg.Build(),
-                };
-                this.chatGui.Print(xivMsg);
+                    var xivMsg = new XivChatEntry
+                    {
+                        Type = XivChatType.Echo,
+                        Message = echoMsg.Build(),
+                    };
+                    this.chatGui.Print(xivMsg);
 
-                this.serverConnection.SendChatMessage(xivMsg);
+                    this.serverConnection.SendChatMessage(xivMsg);
+                }
             }
-        }
+        });
 
         return true;
     }
@@ -177,6 +213,7 @@ public unsafe class GuiPingHandler
                     if (TryGetStatus(statuses, StatusType.SelfEnhancement, hudElement.Index, out status))
                     {
                         status.OwnerName = character.Name.ExtractText();
+                        status.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -190,6 +227,7 @@ public unsafe class GuiPingHandler
                     if (TryGetStatus(statuses, StatusType.SelfEnfeeblement, hudElement.Index, out status))
                     {
                         status.OwnerName = character.Name.ExtractText();
+                        status.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -203,6 +241,7 @@ public unsafe class GuiPingHandler
                     if (TryGetStatus(statuses, StatusType.SelfOther, hudElement.Index, out status))
                     {
                         status.OwnerName = character.Name.ExtractText();
+                        status.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -216,6 +255,7 @@ public unsafe class GuiPingHandler
                     if (TryGetStatus(statuses, StatusType.SelfConditionalEnhancement, hudElement.Index, out status))
                     {
                         status.OwnerName = character.Name.ExtractText();
+                        status.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -238,6 +278,7 @@ public unsafe class GuiPingHandler
                     if (TryGetStatus(statuses, StatusType.PartyListStatus, hudElement.Index, out status))
                     {
                         status.OwnerName = partyMember.Name.ExtractText();
+                        status.IsOnSelf = partyMemberIndex == 0;
                         return true;
                     }
                 }
@@ -267,9 +308,13 @@ public unsafe class GuiPingHandler
         foreach (var s in allStatuses)
         {
             if (s.StatusId == 0) { continue; }
-            if (!this.statusSheet.TryGetStatusById(s.StatusId, out var statusInfo)) { continue; }
-
-            statusInfo.IsOwnEnhancement = s.SourceId == localPlayerId;
+            var luminaStatuses = this.dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(this.clientState.ClientLanguage);
+            if (!luminaStatuses.TryGetRow(s.StatusId, out var luminaStatus)) { continue; }
+            var statusInfo = new Status(luminaStatus)
+            {
+                SourceIsSelf = s.SourceId == localPlayerId,
+                Stacks = s.Param,
+            };
 
             // Intentionally putting switch inside foreach instead of outside for code clarity
             switch (type)
@@ -282,7 +327,7 @@ public unsafe class GuiPingHandler
                         continue;
                     }
                     // Enhancements applied by others are treated as Other if the HUD config option is set
-                    if (isOthersEnhancementsDisplayedInOthers && !statusInfo.IsOwnEnhancement) { continue; }
+                    if (isOthersEnhancementsDisplayedInOthers && !statusInfo.SourceIsSelf) { continue; }
                     break;
 
                 case StatusType.SelfEnfeeblement:
@@ -292,7 +337,7 @@ public unsafe class GuiPingHandler
                 case StatusType.SelfOther:
                     // Enhancements applied by others are treated as Other if the HUD config option is set
                     if (!statusInfo.IsOther &&
-                        (!isOthersEnhancementsDisplayedInOthers || statusInfo.IsOwnEnhancement))
+                        (!isOthersEnhancementsDisplayedInOthers || statusInfo.SourceIsSelf))
                     {
                         continue;
                     }
@@ -315,7 +360,7 @@ public unsafe class GuiPingHandler
         var sortedStatuses = this.statuses.OrderByDescending(s => s.PartyListPriority);
         if (isOwnEnhancementsPrioritized && type == StatusType.SelfEnhancement)
         {
-            sortedStatuses = sortedStatuses.ThenByDescending(s => s.IsOwnEnhancement);
+            sortedStatuses = sortedStatuses.ThenByDescending(s => s.SourceIsSelf);
         }
         if (isOthersEnhancementsDisplayedInOthers && type == StatusType.SelfOther)
         {

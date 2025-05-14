@@ -15,9 +15,10 @@ public class ConfigWindowPresenter(
     ConfigWindow view,
     IFramework framework,
     IDataManager dataManager,
+    IClientState clientState,
     KeyStateWrapper keyStateWrapper,
     Configuration configuration,
-    StatusSheet statusSheet,
+    XivHudNodeMap hudNodeMap,
     ILogger logger) : IPluginUIPresenter, IDisposable
 {
     public IPluginUIView View => this.view;
@@ -25,9 +26,10 @@ public class ConfigWindowPresenter(
     private readonly ConfigWindow view = view;
     private readonly IFramework framework = framework;
     private readonly IDataManager dataManager = dataManager;
+    private readonly IClientState clientState = clientState;
     private readonly KeyStateWrapper keyStateWrapper = keyStateWrapper;
     private readonly Configuration configuration = configuration;
-    private readonly StatusSheet statusSheet = statusSheet;
+    private readonly XivHudNodeMap hudNodeMap = hudNodeMap;
     private readonly ILogger logger = logger;
 
     private bool keyDownListenerSubscribed;
@@ -108,14 +110,29 @@ public class ConfigWindowPresenter(
                     // These include Other statuses
                     // These seem randomly sorted, but statuses with the same PartyListPriority are
                     // sorted relative to each other
-                    foreach (var status in partyMember.Object->StatusManager.Status)
+                    foreach (var characterStatus in partyMember.Object->StatusManager.Status)
                     {
-                        if (status.StatusId == 0) { continue; }
-                        this.statusSheet.TryGetStatusById(status.StatusId, out var s);
+                        if (characterStatus.StatusId == 0) { continue; }
+                        var luminaStatuses = this.dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(this.clientState.ClientLanguage);
+                        Status status = new() { Id = characterStatus.StatusId };
+                        if (luminaStatuses.TryGetRow(characterStatus.StatusId, out var luminaStatus))
+                        {
+                            status = new Status(luminaStatus)
+                            {
+                                Stacks = characterStatus.Param,
+                            };
+                        }
                         this.logger.Info("Party member {0}, index {1}, has status {2}",
-                           partyMember.Object->NameString, partyMember.Index, JsonConvert.SerializeObject(s).ToString());
+                           partyMember.Object->NameString, partyMember.Index, JsonConvert.SerializeObject(status).ToString());
                     }
                 }
+            }
+        });
+        this.view.PrintNodeMap.Subscribe(_ =>
+        {
+            foreach (var n in this.hudNodeMap.CollisionNodeMap)
+            {
+                this.logger.Info("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
             }
         });
     }

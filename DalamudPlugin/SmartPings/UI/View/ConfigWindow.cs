@@ -37,6 +37,8 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
 
     public IObservable<Unit> PrintStatuses => printStatuses.AsObservable();
     private readonly Subject<Unit> printStatuses = new();
+    public IObservable<Unit> PrintNodeMap => printNodeMap.AsObservable();
+    private readonly Subject<Unit> printNodeMap = new();
 
     public IReactiveProperty<float> MasterVolume { get; } = new ReactiveProperty<float>();
 
@@ -162,6 +164,10 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         if (ImGui.Button("Print Statuses"))
         {
             this.printStatuses.OnNext(Unit.Default);
+        }
+        if (ImGui.Button("Print Node Map"))
+        {
+            this.printNodeMap.OnNext(Unit.Default);
         }
 #endif
     }

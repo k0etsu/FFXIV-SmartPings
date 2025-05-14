@@ -67,7 +67,6 @@ public class PluginModule : NinjectModule
 
         // Data
         Bind<Configuration>().ToMethod(GetConfiguration).InSingletonScope();
-        Bind<StatusSheet>().ToMethod(CreateStatusSheet).InSingletonScope();
 
         Bind<ILogger>().To<DalamudLogger>();
         Bind<DalamudLoggerFactory>().ToSelf();
@@ -80,19 +79,5 @@ public class PluginModule : NinjectModule
             ?? new Configuration();
         configuration.Initialize(PluginInitializer.PluginInterface);
         return configuration;
-    }
-
-    private StatusSheet CreateStatusSheet(IContext context)
-    {
-        var dataManager = context.Kernel.Get<IDataManager>();
-        var clientState = context.Kernel.Get<IClientState>();
-        var logger = context.Kernel.Get<ILogger>();
-        //XivAlexander will crash if an ExcelSheet instance is accessed outside of the thread it is created in.
-        var statusSheet = new StatusSheet(dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(clientState.ClientLanguage));
-        if (statusSheet.Count == 0)
-        {
-            logger.Error("Could not load Status Excel Sheet. UI pings will not work.");
-        }
-        return statusSheet;
     }
 }
