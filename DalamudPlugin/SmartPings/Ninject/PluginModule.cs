@@ -3,7 +3,6 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using ECommons.Automation;
-using Ninject;
 using Ninject.Activation;
 using Ninject.Modules;
 using SmartPings.Audio;

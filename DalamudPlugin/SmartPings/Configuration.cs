@@ -18,10 +18,14 @@ namespace SmartPings
 
         public int SelectedAudioOutputDeviceIndex { get; set; } = -1;
 
-        public bool EnablePingInput { get; set; } = true;
         public VirtualKey PingKeybind { get; set; } = VirtualKey.G;
         public VirtualKey QuickPingKeybind { get; set; } = VirtualKey.CONTROL;
 
+        public bool EnableGroundPings { get; set; } = true;
+        public bool EnablePingWheel { get; set; } = true;
+        public GroundPing.Type DefaultGroundPingType { get; set; } = GroundPing.Type.Basic;
+
+        public bool EnableGuiPings { get; set; } = true;
         public bool SendGuiPingsToCustomServer { get; set; } = true;
         public bool SendGuiPingsToXivChat { get; set; }
 

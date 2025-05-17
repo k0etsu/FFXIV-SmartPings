@@ -27,11 +27,12 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         set => this.visible = value;
     }
 
-    public IReactiveProperty<bool> EnablePingInput { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<Keybind> KeybindBeingEdited { get; } = new ReactiveProperty<Keybind>();
     public IObservable<Keybind> ClearKeybind => clearKeybind.AsObservable();
     private readonly Subject<Keybind> clearKeybind = new();
 
+    public IReactiveProperty<bool> EnableGroundPings { get; } = new ReactiveProperty<bool>();
+    public IReactiveProperty<bool> EnableGuiPings { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<bool> SendGuiPingsToCustomServer { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<bool> SendGuiPingsToXivChat { get; } = new ReactiveProperty<bool>();
 
@@ -129,32 +130,43 @@ public class ConfigWindow : Window, IPluginUIView, IDisposable
         DrawKeybindEdit(Keybind.QuickPing, this.configuration.QuickPingKeybind, "Quick Ping Keybind",
             "Lefting clicking while holding this keybind will execute a ping.");
 
-        //var enablePingInput = this.EnablePingInput.Value;
-        //if (ImGui.Checkbox("Enable Ping Input", ref enablePingInput))
-        //{
-        //    this.EnablePingInput.Value = enablePingInput;
-        //}
+        ImGui.Dummy(new Vector2(0.0f, 5.0f)); // ---------------
+
+        var enableGroundPings = this.EnableGroundPings.Value;
+        if (ImGui.Checkbox("Enable Ground Pings", ref enableGroundPings))
+        {
+            this.EnableGroundPings.Value = enableGroundPings;
+        }
 
         ImGui.Dummy(new Vector2(0.0f, 5.0f)); // ---------------
 
-        var sendGuiPingsToCustomServer = this.SendGuiPingsToCustomServer.Value;
-        if (ImGui.Checkbox("Send UI pings to joined room", ref sendGuiPingsToCustomServer))
+        var enableGuiPings = this.EnableGuiPings.Value;
+        if (ImGui.Checkbox("Enable UI Pings", ref enableGuiPings))
         {
-            this.SendGuiPingsToCustomServer.Value = sendGuiPingsToCustomServer;
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Sends UI pings as /echo messages to other players in the same plugin room. This avoids sending traceable data to XIV servers.");
+            this.EnableGuiPings.Value = enableGuiPings;
         }
 
-        var sendGuiPingsToXivChat = this.SendGuiPingsToXivChat.Value;
-        if (ImGui.Checkbox("Send UI pings in game chat (!)", ref sendGuiPingsToXivChat))
+        using (ImRaii.Disabled(!this.EnableGuiPings.Value))
         {
-            this.SendGuiPingsToXivChat.Value = sendGuiPingsToXivChat;
-        }
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Sending messages in game chat may be traceable as plugin usage. Use with caution!");
+            var sendGuiPingsToCustomServer = this.SendGuiPingsToCustomServer.Value;
+            if (ImGui.Checkbox("Send UI pings to joined room", ref sendGuiPingsToCustomServer))
+            {
+                this.SendGuiPingsToCustomServer.Value = sendGuiPingsToCustomServer;
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Sends UI pings as /echo messages to other players in the same plugin room. This avoids sending traceable data to XIV servers.");
+            }
+
+            var sendGuiPingsToXivChat = this.SendGuiPingsToXivChat.Value;
+            if (ImGui.Checkbox("Send UI pings in game chat (!)", ref sendGuiPingsToXivChat))
+            {
+                this.SendGuiPingsToXivChat.Value = sendGuiPingsToXivChat;
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Sending messages in game chat may be traceable as plugin usage. Use with caution!");
+            }
         }
 
 #if DEBUG

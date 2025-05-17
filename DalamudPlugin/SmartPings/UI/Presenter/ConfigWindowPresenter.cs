@@ -48,8 +48,10 @@ public class ConfigWindowPresenter(
 
     private void BindVariables()
     {
-        Bind(this.view.EnablePingInput,
-            b => { this.configuration.EnablePingInput = b; this.configuration.Save(); }, this.configuration.EnablePingInput);
+        Bind(this.view.EnableGroundPings,
+            b => { this.configuration.EnableGroundPings = b; this.configuration.Save(); }, this.configuration.EnableGroundPings);
+        Bind(this.view.EnableGuiPings,
+            b => { this.configuration.EnableGuiPings = b; this.configuration.Save(); }, this.configuration.EnableGuiPings);
 
         Bind(this.view.SendGuiPingsToCustomServer,
             b => { this.configuration.SendGuiPingsToCustomServer = b; this.configuration.Save(); }, this.configuration.SendGuiPingsToCustomServer);

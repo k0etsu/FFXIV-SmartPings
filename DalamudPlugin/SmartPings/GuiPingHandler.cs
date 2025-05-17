@@ -61,12 +61,17 @@ public unsafe class GuiPingHandler
     public bool TryPingUi()
     {
         var collisionNode = AtkStage.Instance()->AtkCollisionManager->IntersectingCollisionNode;
+        var addon = AtkStage.Instance()->AtkCollisionManager->IntersectingAddon;
 
-        if (collisionNode == null) { return false; }
+        if (collisionNode == null && addon == null) { return false; }
         // World UI such as Nameplates have this flag
-        if (collisionNode->NodeFlags.HasFlag(NodeFlags.UseDepthBasedPriority)) { return false; }
+        if (collisionNode != null && collisionNode->NodeFlags.HasFlag(NodeFlags.UseDepthBasedPriority)) { return false; }
 
-        this.logger.Debug("Mouse over collision node {0}", ((nint)collisionNode).ToString("X"));
+        this.logger.Debug("Mouse over collision node {0} and addon {1}",
+            ((nint)collisionNode).ToString("X"),
+            ((nint)addon).ToString("X"));
+
+        if (!this.configuration.EnableGuiPings) { return true; }
 
         this.framework.Run(() =>
         {
@@ -159,7 +164,6 @@ public unsafe class GuiPingHandler
     {
         // Accessing IClientState in a non-framework thread will crash XivAlexander, so this is a
         // different way of getting the local player name
-
         if (0 < AgentHUD.Instance()->PartyMemberCount)
         {
             return AgentHUD.Instance()->PartyMembers[0].Name.ExtractText();
