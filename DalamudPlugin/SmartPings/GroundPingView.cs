@@ -1,6 +1,7 @@
 ﻿using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using ImGuiNET;
 using SmartPings.Extensions;
 using SmartPings.Input;
@@ -31,11 +32,11 @@ public class GroundPingView : IPluginUIView, IDisposable
     private readonly IClientState clientState;
     private readonly IGameGui gameGui;
     private readonly ITextureProvider textureProvider;
-    private readonly IKeyState keyState;
     private readonly IAddonLifecycle addonLifecycle;
     private readonly IAddonEventManager addonEventManager;
     private readonly IDataManager dataManager;
     private readonly InputEventSource inputEventSource;
+    private readonly KeyStateWrapper keyStateWrapper;
     private readonly Configuration configuration;
     private readonly MapManager mapManager;
     private readonly ILogger logger;
@@ -53,8 +54,11 @@ public class GroundPingView : IPluginUIView, IDisposable
     private const float PING_WHEEL_SIZE = 310;
     private const float PING_WHEEL_CENTER_SIZE_MULTIPLIER = 0.141f;
 
+    private bool IsQuickPingKeybindDown => this.keyStateWrapper.IsVirtualKeyValid(this.configuration.QuickPingKeybind) &&
+        this.keyStateWrapper.GetRawValue(this.configuration.QuickPingKeybind) > 0;
     private bool CreatePingOnLeftMouseUp => pingLeftClickPosition.HasValue;
 
+    private bool cursorIsPing;
     private bool leftMouseUpThisFrame;
     private Vector2? pingLeftClickPosition;
     private float pingLeftClickHeldDuration;
@@ -70,11 +74,11 @@ public class GroundPingView : IPluginUIView, IDisposable
         IClientState clientState,
         IGameGui gameGui,
         ITextureProvider textureProvider,
-        IKeyState keyState,
         IAddonLifecycle addonLifecycle,
         IAddonEventManager addonEventManager,
         IDataManager dataManager,
         InputEventSource inputEventSource,
+        KeyStateWrapper keyStateWrapper,
         Configuration configuration,
         MapManager mapManager,
         GuiPingHandler uiPingHandler,
@@ -85,20 +89,30 @@ public class GroundPingView : IPluginUIView, IDisposable
         this.clientState = clientState;
         this.gameGui = gameGui;
         this.textureProvider = textureProvider;
-        this.keyState = keyState;
         this.addonLifecycle = addonLifecycle;
         this.addonEventManager = addonEventManager;
         this.dataManager = dataManager;
         this.inputEventSource = inputEventSource;
+        this.keyStateWrapper = keyStateWrapper;
         this.configuration = configuration;
         this.mapManager = mapManager;
         this.logger = logger;
 
+        this.keyStateWrapper.OnKeyDown += key =>
+        {
+            if (key == this.configuration.PingKeybind)
+            {
+                cursorIsPing = true;
+            }
+            else if (key == Dalamud.Game.ClientState.Keys.VirtualKey.ESCAPE)
+            {
+                cursorIsPing = false;
+            }
+        };
+
         this.inputEventSource.SubscribeToKeyDown(args =>
         {
-            if (args.Key == WindowsInput.Events.KeyCode.LButton &&
-                this.keyState.IsVirtualKeyValid(this.configuration.QuickPingKeybind) &&
-                this.keyState.GetRawValue(this.configuration.QuickPingKeybind) > 0)
+            if (args.Key == WindowsInput.Events.KeyCode.LButton && (IsQuickPingKeybindDown || cursorIsPing))
             {
                 if (ImGui.IsWindowHovered(ImGuiHoveredFlags.AnyWindow))
                 {
@@ -115,20 +129,27 @@ public class GroundPingView : IPluginUIView, IDisposable
                 // Both lines are needed to consistently capture mouse input
                 ImGui.GetIO().WantCaptureMouse = true;
                 ImGui.SetNextFrameWantCaptureMouse(true);
+                cursorIsPing = false;
                 pingLeftClickPosition = ImGui.GetMousePos();
                 pingLeftClickHeldDuration = 0;
                 pingWheelActive = false;
             }
+
+            if (args.Key == WindowsInput.Events.KeyCode.RButton)
+            {
+                cursorIsPing = false;
+            }
         });
+
         this.inputEventSource.SubscribeToKeyUp(args =>
         {
             if (args.Key == WindowsInput.Events.KeyCode.LButton)
             {
+                cursorIsPing = false;
                 leftMouseUpThisFrame = true;
             }
         });
     }
-
 
     public void Dispose()
     {
@@ -155,7 +176,7 @@ public class GroundPingView : IPluginUIView, IDisposable
             {
                 if (!leftMouseUpThisFrame)
                 {
-                    if (!pingWheelActive)
+                    if (!pingWheelActive && this.configuration.EnablePingWheel)
                     {
                         pingLeftClickHeldDuration += ImGui.GetIO().DeltaTime;
                         var moveDistance = Vector2.Distance(ImGui.GetMousePos(), pingLeftClickPosition!.Value);
@@ -173,7 +194,7 @@ public class GroundPingView : IPluginUIView, IDisposable
                 }
                 else
                 {
-                    var pingType = GroundPing.Type.Basic;
+                    var pingType = this.configuration.DefaultGroundPingType;
                     if (pingWheelActive)
                     {
                         switch (activePingWheelSection)
@@ -186,8 +207,10 @@ public class GroundPingView : IPluginUIView, IDisposable
                         }
                     }
 
+                    // When ping wheel isn't enabled, it feels better to place the ping at the mouse position on left click release rather than press
+                    var pingPosition = this.configuration.EnablePingWheel ? pingLeftClickPosition!.Value : ImGui.GetMousePos();
                     if (pingType != GroundPing.Type.None &&
-                        this.gameGui.ScreenToWorld(pingLeftClickPosition!.Value, out var worldPos))
+                        this.gameGui.ScreenToWorld(pingPosition, out var worldPos))
                     {
                         this.logger.Debug("Clicked on world position {0} for ground ping", worldPos);
                         var ping = new GroundPing
@@ -210,6 +233,21 @@ public class GroundPingView : IPluginUIView, IDisposable
         else
         {
             this.presenter.Value.GroundPings.Clear();
+        }
+
+        if (cursorIsPing)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.None);
+            unsafe
+            {
+                AtkStage.Instance()->AtkCursor.Hide();
+            }
+            DrawPingCursor(ImGui.GetForegroundDrawList(), ImGui.GetMousePos(), 50 * Vector2.One);
+        }
+        else if (IsQuickPingKeybindDown)
+        {
+            var position = ImGui.GetMousePos() + new Vector2(14, 30);
+            DrawPingCursor(ImGui.GetForegroundDrawList(), position, 25 * Vector2.One);
         }
 
         leftMouseUpThisFrame = false;
@@ -286,6 +324,12 @@ public class GroundPingView : IPluginUIView, IDisposable
     }
 
     #region Draw Functions
+
+    private void DrawPingCursor(ImDrawListPtr drawList, Vector2 mousePosition, Vector2 size)
+    {
+        var img = this.textureProvider.GetFromFile(this.pluginInterface.GetResourcePath("ping_cursor.png")).GetWrapOrDefault()?.ImGuiHandle ?? default;
+        drawList.AddImage(img, mousePosition - size / 2, mousePosition + size / 2);
+    }
 
     private PingWheelSection DrawPingWheel(ImDrawListPtr drawList, Vector2 wheelPosition, Vector2 mousePosition)
     {
