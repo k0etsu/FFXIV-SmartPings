@@ -71,6 +71,8 @@ public class MainWindowPresenter(
 
         Bind(this.view.EnableGuiPings,
             b => { this.configuration.EnableGuiPings = b; this.configuration.Save(); }, this.configuration.EnableGuiPings);
+        Bind(this.view.EnableHpMpPings,
+            b => { this.configuration.EnableHpMpPings = b; this.configuration.Save(); }, this.configuration.EnableHpMpPings);
         Bind(this.view.SendGuiPingsToCustomServer,
             b => { this.configuration.SendGuiPingsToCustomServer = b; this.configuration.Save(); }, this.configuration.SendGuiPingsToCustomServer);
         Bind(this.view.SendGuiPingsToXivChat,
@@ -173,11 +175,18 @@ public class MainWindowPresenter(
                 }
             }
         });
-        this.view.PrintNodeMap.Subscribe(_ =>
+        this.view.PrintNodeMap1.Subscribe(_ =>
         {
             foreach (var n in this.hudNodeMap.CollisionNodeMap)
             {
                 this.logger.Info("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
+            }
+        });
+        this.view.PrintNodeMap2.Subscribe(_ =>
+        {
+            foreach (var n in this.hudNodeMap.ElementNodeMap)
+            {
+                this.logger.Info("HudSection {0} -> {1}", n.Key.HudSection, n.Value.ToString("X"));
             }
         });
     }

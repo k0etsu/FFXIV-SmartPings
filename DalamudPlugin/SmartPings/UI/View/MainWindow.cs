@@ -49,13 +49,16 @@ public class MainWindow : Window, IPluginUIView, IDisposable
     public IReactiveProperty<bool> EnablePingWheel { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<GroundPing.Type> DefaultGroundPingType { get; } = new ReactiveProperty<GroundPing.Type>();
     public IReactiveProperty<bool> EnableGuiPings { get; } = new ReactiveProperty<bool>();
+    public IReactiveProperty<bool> EnableHpMpPings { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<bool> SendGuiPingsToCustomServer { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<bool> SendGuiPingsToXivChat { get; } = new ReactiveProperty<bool>();
 
     public IObservable<Unit> PrintStatuses => printStatuses.AsObservable();
     private readonly Subject<Unit> printStatuses = new();
-    public IObservable<Unit> PrintNodeMap => printNodeMap.AsObservable();
-    private readonly Subject<Unit> printNodeMap = new();
+    public IObservable<Unit> PrintNodeMap1 => printNodeMap1.AsObservable();
+    private readonly Subject<Unit> printNodeMap1 = new();
+    public IObservable<Unit> PrintNodeMap2 => printNodeMap2.AsObservable();
+    private readonly Subject<Unit> printNodeMap2 = new();
 
     public IReactiveProperty<float> MasterVolume { get; } = new ReactiveProperty<float>();
 
@@ -399,10 +402,13 @@ public class MainWindow : Window, IPluginUIView, IDisposable
 
         ImGui.Text("Keybinds");
         ImGui.SameLine(); Common.HelpMarker("Right click to clear a keybind.");
-        DrawKeybindEdit(Keybind.Ping, this.configuration.PingKeybind, "Ping Keybind",
-            "Pressing this keybind will make the next left click execute a ping.");
-        DrawKeybindEdit(Keybind.QuickPing, this.configuration.QuickPingKeybind, "Quick Ping Keybind",
-            "Lefting clicking while holding this keybind will execute a ping.");
+        using (ImRaii.PushIndent())
+        {
+            DrawKeybindEdit(Keybind.Ping, this.configuration.PingKeybind, "Ping Keybind",
+                "Pressing this keybind will make the next left click execute a ping.");
+            DrawKeybindEdit(Keybind.QuickPing, this.configuration.QuickPingKeybind, "Quick Ping Keybind",
+                "Lefting clicking while holding this keybind will execute a ping.");
+        }
 
         ImGui.Dummy(new Vector2(0.0f, 5.0f)); // ---------------
 
@@ -412,6 +418,7 @@ public class MainWindow : Window, IPluginUIView, IDisposable
             this.EnableGroundPings.Value = enableGroundPings;
         }
 
+        using (ImRaii.PushIndent())
         using (ImRaii.Disabled(!this.EnableGroundPings.Value))
         {
             var enablePingWheel = this.EnablePingWheel.Value;
@@ -419,6 +426,7 @@ public class MainWindow : Window, IPluginUIView, IDisposable
             {
                 this.EnablePingWheel.Value = enablePingWheel;
             }
+            ImGui.SameLine(); Common.HelpMarker("More ping types coming soon™");
 
             var defaultGroundPingType = (int)this.DefaultGroundPingType.Value;
             if (ImGui.Combo("Default Ping", ref defaultGroundPingType, this.groundPingTypes, this.groundPingTypes.Length))
@@ -434,9 +442,22 @@ public class MainWindow : Window, IPluginUIView, IDisposable
         {
             this.EnableGuiPings.Value = enableGuiPings;
         }
+        ImGui.SameLine(); Common.HelpMarker("Target statuses not yet supported");
 
+        using (ImRaii.PushIndent())
         using (ImRaii.Disabled(!this.EnableGuiPings.Value))
         {
+            var enableHpMpPings = this.EnableHpMpPings.Value;
+            if (ImGui.Checkbox("Enable HP/MP Pings", ref enableHpMpPings))
+            {
+                this.EnableHpMpPings.Value = enableHpMpPings;
+            }
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Mouse input will be blocked if pinging HP/MP values, so disable this if this is not desired.");
+            }
+            ImGui.SameLine(); Common.HelpMarker("Only works on party list");
+
             var sendGuiPingsToCustomServer = this.SendGuiPingsToCustomServer.Value;
             if (ImGui.Checkbox("Send UI pings to joined room", ref sendGuiPingsToCustomServer))
             {
@@ -466,9 +487,15 @@ public class MainWindow : Window, IPluginUIView, IDisposable
         {
             this.printStatuses.OnNext(Unit.Default);
         }
-        if (ImGui.Button("Print Node Map"))
+        ImGui.SameLine();
+        if (ImGui.Button("Print Node Map 1"))
         {
-            this.printNodeMap.OnNext(Unit.Default);
+            this.printNodeMap1.OnNext(Unit.Default);
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Print Node Map 2"))
+        {
+            this.printNodeMap2.OnNext(Unit.Default);
         }
 #endif
     }
@@ -478,17 +505,17 @@ public class MainWindow : Window, IPluginUIView, IDisposable
         using var miscTab = ImRaii.TabItem("Misc");
         if (!miscTab) return;
 
-        var playRoomJoinAndLeaveSounds = this.PlayRoomJoinAndLeaveSounds.Value;
-        if (ImGui.Checkbox("Play room join and leave sounds", ref playRoomJoinAndLeaveSounds))
-        {
-            this.PlayRoomJoinAndLeaveSounds.Value = playRoomJoinAndLeaveSounds;
-        }
+        //var playRoomJoinAndLeaveSounds = this.PlayRoomJoinAndLeaveSounds.Value;
+        //if (ImGui.Checkbox("Play room join and leave sounds", ref playRoomJoinAndLeaveSounds))
+        //{
+        //    this.PlayRoomJoinAndLeaveSounds.Value = playRoomJoinAndLeaveSounds;
+        //}
 
-        var keybindsRequireGameFocus = this.KeybindsRequireGameFocus.Value;
-        if (ImGui.Checkbox("Keybinds require game focus", ref keybindsRequireGameFocus))
-        {
-            this.KeybindsRequireGameFocus.Value = keybindsRequireGameFocus;
-        }
+        //var keybindsRequireGameFocus = this.KeybindsRequireGameFocus.Value;
+        //if (ImGui.Checkbox("Keybinds require game focus", ref keybindsRequireGameFocus))
+        //{
+        //    this.KeybindsRequireGameFocus.Value = keybindsRequireGameFocus;
+        //}
 
         var printLogsToChat = this.PrintLogsToChat.Value;
         if (ImGui.Checkbox("Print logs to chat", ref printLogsToChat))

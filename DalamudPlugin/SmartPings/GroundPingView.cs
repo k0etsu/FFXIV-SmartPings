@@ -126,9 +126,7 @@ public class GroundPingView : IPluginUIView, IDisposable
 
                 if (!this.configuration.EnableGroundPings) { return; }
 
-                // Both lines are needed to consistently capture mouse input
-                ImGui.GetIO().WantCaptureMouse = true;
-                ImGui.SetNextFrameWantCaptureMouse(true);
+                ImGuiExtensions.CaptureMouseThisFrame();
                 cursorIsPing = false;
                 pingLeftClickPosition = ImGui.GetMousePos();
                 pingLeftClickHeldDuration = 0;

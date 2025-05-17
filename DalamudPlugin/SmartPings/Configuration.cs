@@ -26,6 +26,7 @@ namespace SmartPings
         public GroundPing.Type DefaultGroundPingType { get; set; } = GroundPing.Type.Basic;
 
         public bool EnableGuiPings { get; set; } = true;
+        public bool EnableHpMpPings { get; set; } = true;
         public bool SendGuiPingsToCustomServer { get; set; } = true;
         public bool SendGuiPingsToXivChat { get; set; }
 

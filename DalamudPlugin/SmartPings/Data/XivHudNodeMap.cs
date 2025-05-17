@@ -12,6 +12,8 @@ public unsafe class XivHudNodeMap
     public enum HudSection
     {
         None = 0,
+
+        // Collision nodes that nodes are mapped to
         StatusEnhancements = 1,
         StatusEnfeeblements = 2,
         StatusOther = 3,
@@ -30,25 +32,36 @@ public unsafe class XivHudNodeMap
         PartyList8Status = 28,
         PartyList9Status = 29,
 
-        PartyList1Hp = 31,
-        PartyList2Hp = 32,
-        PartyList3Hp = 33,
-        PartyList4Hp = 34,
-        PartyList5Hp = 35,
-        PartyList6Hp = 36,
-        PartyList7Hp = 37,
-        PartyList8Hp = 38,
-        PartyList9Hp = 39,
+        PartyList1CollisionNode = 31,
+        PartyList2CollisionNode = 32,
+        PartyList3CollisionNode = 33,
+        PartyList4CollisionNode = 34,
+        PartyList5CollisionNode = 35,
+        PartyList6CollisionNode = 36,
+        PartyList7CollisionNode = 37,
+        PartyList8CollisionNode = 38,
+        PartyList9CollisionNode = 39,
 
-        PartyList1Mp = 41,
-        PartyList2Mp = 42,
-        PartyList3Mp = 43,
-        PartyList4Mp = 44,
-        PartyList5Mp = 45,
-        PartyList6Mp = 46,
-        PartyList7Mp = 47,
-        PartyList8Mp = 48,
-        PartyList9Mp = 49,
+        // Non-collision nodes that are mapped to a node
+        PartyList1Hp = 41,
+        PartyList2Hp = 42,
+        PartyList3Hp = 43,
+        PartyList4Hp = 44,
+        PartyList5Hp = 45,
+        PartyList6Hp = 46,
+        PartyList7Hp = 47,
+        PartyList8Hp = 48,
+        PartyList9Hp = 49,
+
+        PartyList1Mp = 51,
+        PartyList2Mp = 52,
+        PartyList3Mp = 53,
+        PartyList4Mp = 54,
+        PartyList5Mp = 55,
+        PartyList6Mp = 56,
+        PartyList7Mp = 57,
+        PartyList8Mp = 58,
+        PartyList9Mp = 59,
     }
 
     public struct HudElement
@@ -58,17 +71,20 @@ public unsafe class XivHudNodeMap
     }
 
     public IReadOnlyDictionary<nint, HudElement> CollisionNodeMap => this.collisionNodeMap;
+    public IReadOnlyDictionary<HudElement, nint> ElementNodeMap => this.elementNodeMap;
 
     private readonly IGameGui gameGui;
     private readonly ILogger logger;
 
     private readonly Dictionary<nint, HudElement> collisionNodeMap = [];
     private readonly List<nint> partyListStatusNodes = [];
+    private readonly Dictionary<HudElement, nint> elementNodeMap = [];
 
     private bool enhancementsLoaded;
     private bool enfeeblementsLoaded;
     private bool otherLoaded;
     private bool conditionalEnhancementsLoaded;
+    private bool partyListLoaded;
 
     public XivHudNodeMap(
         IGameGui gameGui,
@@ -183,7 +199,7 @@ public unsafe class XivHudNodeMap
         }
         // The status icon nodes in the party list are prone to changing, so load the party list every time
         // Also, these status icon nodes may not always be in the StatusIcons array, except for the first node
-        foreach(var n in this.partyListStatusNodes)
+        foreach (var n in this.partyListStatusNodes)
         {
             this.collisionNodeMap.Remove(n);
         }
@@ -212,7 +228,36 @@ public unsafe class XivHudNodeMap
                 statusIconNode = (AtkComponentIconText*)nextSiblingNode->GetComponent();
                 j++;
             }
+
+            if (!this.partyListLoaded)
+            {
+                var partyCollisionNode = partyMember.PartyMemberComponent->UldManager.RootNode;
+                if (partyCollisionNode != null)
+                {
+                    this.collisionNodeMap.TryAdd((nint)partyCollisionNode, new()
+                    {
+                        HudSection = HudSection.PartyList1CollisionNode + i,
+                    });
+                }
+                if (partyMember.HPGaugeBar != null && partyMember.HPGaugeBar->OwnerNode != null)
+                {
+                    this.elementNodeMap.TryAdd(new()
+                    {
+                        HudSection = HudSection.PartyList1Hp + i,
+                    },
+                    (nint)partyMember.HPGaugeBar->OwnerNode);
+                }
+                if (partyMember.MPGaugeBar != null && partyMember.MPGaugeBar->OwnerNode != null)
+                {
+                    this.elementNodeMap.TryAdd(new()
+                    {
+                        HudSection = HudSection.PartyList1Mp + i,
+                    },
+                    (nint)partyMember.MPGaugeBar->OwnerNode);
+                }
+            }
         }
+        this.partyListLoaded = true;
     }
 
     public void Unload()
@@ -235,6 +280,12 @@ public unsafe class XivHudNodeMap
     {
         Load();
         return this.CollisionNodeMap.TryGetValue((nint)nodePtr, out hudElement);
+    }
+
+    public bool TryGetHudElementNode(HudElement hudElement, out nint nodeAddress)
+    {
+        Load();
+        return this.ElementNodeMap.TryGetValue(hudElement, out nodeAddress);
     }
 
     public bool IsConditionalEnhancementsEnabled()

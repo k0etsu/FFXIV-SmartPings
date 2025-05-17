@@ -4,14 +4,17 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using ECommons.Automation;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using SmartPings.Data;
+using SmartPings.Extensions;
 using SmartPings.Log;
 using SmartPings.Network;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 
 namespace SmartPings;
@@ -73,34 +76,34 @@ public unsafe class GuiPingHandler
 
         if (!this.configuration.EnableGuiPings) { return true; }
 
-        this.framework.Run(() =>
+        if (TryGetCollisionNodeElementInfo(collisionNode, out var info))
         {
-            if (TryGetStatusOfCollisionNode(collisionNode, out var foundStatus))
+            var echoMsg = new SeStringBuilder();
+            var chatMsg = new StringBuilder();
+
+            // Source name -------------
+            var localPlayerName = GetLocalPlayerName();
+            echoMsg.AddUiForeground($"({localPlayerName}) ", BLUE);
+
+            // Target name -------------
+            if (!info.IsOnSelf)
             {
-                var echoMsg = new SeStringBuilder();
-                var chatMsg = new StringBuilder();
+                echoMsg.AddUiForeground($"{info.OwnerName}: ", LIGHT_BLUE);
 
-                // Source name -------------
-                var localPlayerName = GetLocalPlayerName();
-                echoMsg.AddUiForeground($"({localPlayerName}) ", BLUE);
+                chatMsg.Append($"{info.OwnerName}: ");
+            }
 
-                // Target name -------------
-                if (!foundStatus.IsOnSelf)
-                {
-                    echoMsg.AddUiForeground($"{foundStatus.OwnerName}: ", LIGHT_BLUE);
-
-                    chatMsg.Append($"{foundStatus.OwnerName}: ");
-                }
-
+            if (info.ElementType == HudElementInfo.Type.Status)
+            {
                 // Status name --------------
-                echoMsg.AddStatusLink(foundStatus.Id);
+                echoMsg.AddStatusLink(info.Status.Id);
                 // This is how status links are normally constructed
                 echoMsg.AddUiForeground(500);
                 echoMsg.AddUiGlow(501);
                 echoMsg.Append(SeIconChar.LinkMarker.ToIconString());
                 echoMsg.AddUiGlowOff();
                 echoMsg.AddUiForegroundOff();
-                if (foundStatus.IsEnfeeblement)
+                if (info.Status.IsEnfeeblement)
                 {
                     echoMsg.AddUiForeground(518);
                     echoMsg.Append(SeIconChar.Debuff.ToIconString());
@@ -112,50 +115,78 @@ public unsafe class GuiPingHandler
                     echoMsg.Append(SeIconChar.Buff.ToIconString());
                     echoMsg.AddUiForegroundOff();
                 }
-                echoMsg.AddUiForeground($"{foundStatus.Name}", foundStatus.IsEnfeeblement ? RED : YELLOW);
+                echoMsg.AddUiForeground($"{info.Status.Name}", info.Status.IsEnfeeblement ? RED : YELLOW);
                 echoMsg.Append([RawPayload.LinkTerminator]);
 
                 chatMsg.Append("<status>");
 
-                if (foundStatus.MaxStacks > 0)
+                if (info.Status.MaxStacks > 0)
                 {
-                    echoMsg.AddUiForeground($" x{foundStatus.Stacks}", foundStatus.IsEnfeeblement ? RED : YELLOW);
+                    echoMsg.AddUiForeground($" x{info.Status.Stacks}", info.Status.IsEnfeeblement ? RED : YELLOW);
 
-                    chatMsg.Append($" x{foundStatus.Stacks}");
+                    chatMsg.Append($" x{info.Status.Stacks}");
                 }
 
                 // Timer ---------------
-                if (foundStatus.RemainingTime > 0)
+                if (info.Status.RemainingTime > 0)
                 {
                     echoMsg.AddUiForeground(" - ", YELLOW);
-                    var remainingTime = foundStatus.RemainingTime >= 1 ?
-                        MathF.Floor(foundStatus.RemainingTime).ToString() :
-                        foundStatus.RemainingTime.ToString("F1");
+                    var remainingTime = info.Status.RemainingTime >= 1 ?
+                        MathF.Floor(info.Status.RemainingTime).ToString() :
+                        info.Status.RemainingTime.ToString("F1");
                     echoMsg.AddUiForeground($"{remainingTime}s", GREEN);
 
                     chatMsg.Append($" - {remainingTime}s");
                 }
-
-                if (this.configuration.SendGuiPingsToXivChat)
-                {
-                    AgentChatLog.Instance()->ContextStatusId = foundStatus.Id;
-                    // This method must be called on a framework thread or else XIV will crash.
-                    this.chat.SendMessage(chatMsg.ToString());
-                }
-
-                if (this.configuration.SendGuiPingsToCustomServer)
-                {
-                    var xivMsg = new XivChatEntry
-                    {
-                        Type = XivChatType.Echo,
-                        Message = echoMsg.Build(),
-                    };
-                    this.chatGui.Print(xivMsg);
-
-                    this.serverConnection.SendChatMessage(xivMsg);
-                }
             }
-        });
+            else if (info.ElementType == HudElementInfo.Type.Hp)
+            {
+                var hpPercent = (float)info.Hp.Value / info.Hp.MaxValue * 100;
+                var hpString = hpPercent < 1 ? hpPercent.ToString("F1") : hpPercent.ToString("F0");
+                echoMsg.AddUiForeground($"HP: {hpString}%", hpPercent < 10 ? RED : YELLOW);
+                echoMsg.AddUiForeground($" ({info.Hp.Value}/{info.Hp.MaxValue})", GREEN);
+
+                chatMsg.Append($"HP: {hpString}% ({info.Hp.Value}/{info.Hp.MaxValue})");
+
+                ImGuiExtensions.CaptureMouseThisFrame();
+            }
+            else if (info.ElementType == HudElementInfo.Type.Mp)
+            {
+                var mpPercent = (float)info.Mp.Value / info.Mp.MaxValue * 100;
+                var mpString = mpPercent < 1 ? mpPercent.ToString("F1") : mpPercent.ToString("F0");
+                echoMsg.AddUiForeground($"MP: {mpString}%", mpPercent < 10 ? RED : YELLOW);
+                echoMsg.AddUiForeground($" ({info.Mp.Value}/{info.Mp.MaxValue})", GREEN);
+
+                chatMsg.Append($"MP: {mpString}% ({info.Mp.Value}/{info.Mp.MaxValue})");
+
+                ImGuiExtensions.CaptureMouseThisFrame();
+            }
+
+            if (this.configuration.SendGuiPingsToXivChat)
+            {
+                // This method must be called on a framework thread or else XIV will crash.
+                this.framework.Run(() =>
+                {
+                    if (info.ElementType == HudElementInfo.Type.Status)
+                    {
+                        AgentChatLog.Instance()->ContextStatusId = info.Status.Id;
+                    }
+                    this.chat.SendMessage(chatMsg.ToString());
+                });
+            }
+
+            if (this.configuration.SendGuiPingsToCustomServer)
+            {
+                var xivMsg = new XivChatEntry
+                {
+                    Type = XivChatType.Echo,
+                    Message = echoMsg.Build(),
+                };
+                this.chatGui.Print(xivMsg);
+
+                this.serverConnection.SendChatMessage(xivMsg);
+            }
+        }
 
         return true;
     }
@@ -198,10 +229,10 @@ public unsafe class GuiPingHandler
     // Upon clicking one of these UI nodes, we can determine what status should belong in there given the
     // existing statuses and their predicted display order, and pull the status information from the character status arrays.
 
-    private bool TryGetStatusOfCollisionNode(AtkCollisionNode* collisionNode,
-        out Status status)
+    private bool TryGetCollisionNodeElementInfo(AtkCollisionNode* collisionNode,
+        out HudElementInfo info)
     {
-        status = default;
+        info = default;
 
         // Search for the node in our node map to determine if it's a relevant HUD element
         if (!this.hudNodeMap.TryGetAsHudElement((nint)collisionNode, out var hudElement)) { return false; }
@@ -214,10 +245,11 @@ public unsafe class GuiPingHandler
                     var character = AgentHUD.Instance()->PartyMembers[0];
                     var statuses = character.Object->StatusManager.Status;
                     // Find the corresponding status given our predicted UI display order
-                    if (TryGetStatus(statuses, StatusType.SelfEnhancement, hudElement.Index, out status))
+                    if (TryGetStatus(statuses, StatusType.SelfEnhancement, hudElement.Index, out info.Status))
                     {
-                        status.OwnerName = character.Name.ExtractText();
-                        status.IsOnSelf = true;
+                        info.ElementType = HudElementInfo.Type.Status;
+                        info.OwnerName = character.Name.ExtractText();
+                        info.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -228,10 +260,11 @@ public unsafe class GuiPingHandler
                 {
                     var character = AgentHUD.Instance()->PartyMembers[0];
                     var statuses = character.Object->StatusManager.Status;
-                    if (TryGetStatus(statuses, StatusType.SelfEnfeeblement, hudElement.Index, out status))
+                    if (TryGetStatus(statuses, StatusType.SelfEnfeeblement, hudElement.Index, out info.Status))
                     {
-                        status.OwnerName = character.Name.ExtractText();
-                        status.IsOnSelf = true;
+                        info.ElementType = HudElementInfo.Type.Status;
+                        info.OwnerName = character.Name.ExtractText();
+                        info.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -242,10 +275,11 @@ public unsafe class GuiPingHandler
                 {
                     var character = AgentHUD.Instance()->PartyMembers[0];
                     var statuses = character.Object->StatusManager.Status;
-                    if (TryGetStatus(statuses, StatusType.SelfOther, hudElement.Index, out status))
+                    if (TryGetStatus(statuses, StatusType.SelfOther, hudElement.Index, out info.Status))
                     {
-                        status.OwnerName = character.Name.ExtractText();
-                        status.IsOnSelf = true;
+                        info.ElementType = HudElementInfo.Type.Status;
+                        info.OwnerName = character.Name.ExtractText();
+                        info.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -256,10 +290,11 @@ public unsafe class GuiPingHandler
                 {
                     var character = AgentHUD.Instance()->PartyMembers[0];
                     var statuses = character.Object->StatusManager.Status;
-                    if (TryGetStatus(statuses, StatusType.SelfConditionalEnhancement, hudElement.Index, out status))
+                    if (TryGetStatus(statuses, StatusType.SelfConditionalEnhancement, hudElement.Index, out info.Status))
                     {
-                        status.OwnerName = character.Name.ExtractText();
-                        status.IsOnSelf = true;
+                        info.ElementType = HudElementInfo.Type.Status;
+                        info.OwnerName = character.Name.ExtractText();
+                        info.IsOnSelf = true;
                         return true;
                     }
                 }
@@ -274,16 +309,64 @@ public unsafe class GuiPingHandler
             case XivHudNodeMap.HudSection.PartyList7Status:
             case XivHudNodeMap.HudSection.PartyList8Status:
             case XivHudNodeMap.HudSection.PartyList9Status:
-                var partyMemberIndex = hudElement.HudSection - XivHudNodeMap.HudSection.PartyList1Status;
-                if (partyMemberIndex < AgentHUD.Instance()->PartyMemberCount)
                 {
-                    var partyMember = AgentHUD.Instance()->PartyMembers[partyMemberIndex];
-                    var statuses = partyMember.Object->StatusManager.Status;
-                    if (TryGetStatus(statuses, StatusType.PartyListStatus, hudElement.Index, out status))
+                    var partyMemberIndex = hudElement.HudSection - XivHudNodeMap.HudSection.PartyList1Status;
+                    if (partyMemberIndex < AgentHUD.Instance()->PartyMemberCount)
                     {
-                        status.OwnerName = partyMember.Name.ExtractText();
-                        status.IsOnSelf = partyMemberIndex == 0;
-                        return true;
+                        var partyMember = AgentHUD.Instance()->PartyMembers[partyMemberIndex];
+                        var statuses = partyMember.Object->StatusManager.Status;
+                        if (TryGetStatus(statuses, StatusType.PartyListStatus, hudElement.Index, out info.Status))
+                        {
+                            info.ElementType = HudElementInfo.Type.Status;
+                            info.OwnerName = partyMember.Name.ExtractText();
+                            info.IsOnSelf = partyMemberIndex == 0;
+                            return true;
+                        }
+                    }
+                }
+                break;
+
+            case XivHudNodeMap.HudSection.PartyList1CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList2CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList3CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList4CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList5CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList6CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList7CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList8CollisionNode:
+            case XivHudNodeMap.HudSection.PartyList9CollisionNode:
+                {
+                    if (!this.configuration.EnableHpMpPings) { break; }
+
+                    var partyMemberIndex = hudElement.HudSection - XivHudNodeMap.HudSection.PartyList1CollisionNode;
+                    if (partyMemberIndex < AgentHUD.Instance()->PartyMemberCount)
+                    {
+                        var partyMember = AgentHUD.Instance()->PartyMembers[partyMemberIndex];
+                        var mousePosition = new Vector2(UIInputData.Instance()->CursorInputs.PositionX, UIInputData.Instance()->CursorInputs.PositionY);
+                        // Check for HP node
+                        var element = new XivHudNodeMap.HudElement() { HudSection = XivHudNodeMap.HudSection.PartyList1Hp + partyMemberIndex };
+                        if (this.hudNodeMap.TryGetHudElementNode(element, out var hpNode) &&
+                            IsPositionInNode(mousePosition, (AtkResNode*)hpNode))
+                        {
+                            info.ElementType = HudElementInfo.Type.Hp;
+                            info.OwnerName = partyMember.Name.ExtractText();
+                            info.IsOnSelf = partyMemberIndex == 0;
+                            info.Hp.Value = partyMember.Object->Health;
+                            info.Hp.MaxValue = partyMember.Object->MaxHealth;
+                            return true;
+                        }
+                        // Check for MP node
+                        element = new XivHudNodeMap.HudElement() { HudSection = XivHudNodeMap.HudSection.PartyList1Mp + partyMemberIndex };
+                        if (this.hudNodeMap.TryGetHudElementNode(element, out var mpNode) &&
+                            IsPositionInNode(mousePosition, (AtkResNode*)mpNode))
+                        {
+                            info.ElementType = HudElementInfo.Type.Mp;
+                            info.OwnerName = partyMember.Name.ExtractText();
+                            info.IsOnSelf = partyMemberIndex == 0;
+                            info.Mp.Value = partyMember.Object->Mana;
+                            info.Mp.MaxValue = partyMember.Object->MaxMana;
+                            return true;
+                        }
                     }
                 }
                 break;
@@ -386,5 +469,15 @@ public unsafe class GuiPingHandler
         }
 
         return false;
+    }
+
+    private bool IsPositionInNode(Vector2 position, AtkResNode* node)
+    {
+        var xMin = node->ScreenX;
+        var yMin = node->ScreenY;
+        var xMax = xMin + node->Width;
+        var yMax = yMin + node->Height;
+
+        return position.X > xMin && position.X < xMax && position.Y > yMin && position.Y < yMax;
     }
 }

@@ -8,4 +8,11 @@ public static class ImGuiExtensions
     {
         ImGui.GetStyle().Alpha = disabled ? 0.5f : 1.0f;
     }
+
+    public static void CaptureMouseThisFrame()
+    {
+        // Both lines are needed to consistently capture mouse input
+        ImGui.GetIO().WantCaptureMouse = true;
+        ImGui.SetNextFrameWantCaptureMouse(true);
+    }
 }

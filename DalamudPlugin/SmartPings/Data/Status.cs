@@ -35,8 +35,6 @@ public struct Status
     //public bool Invisibility;
 
     public float RemainingTime;
-    public string? OwnerName;
-    public bool IsOnSelf;
     public bool SourceIsSelf;
     public ushort Stacks;
 
