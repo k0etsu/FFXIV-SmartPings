@@ -48,6 +48,13 @@ A public room will automatically match you with players in your map, while priva
 
 UI pings are sent through echo chat by default, but can be configured to send through in-game chat, such as party chat. However, use this feature with caution, as in-game chat logs are recorded by Square Enix.
 
+Currently supported UI pings:
+- Own statuses
+- Party list statuses
+- Party list HP/MP
+- Target statuses
+- Target HP
+
 ## Contributing
 Please use the support discord for idea and code contribution discussion.
 
