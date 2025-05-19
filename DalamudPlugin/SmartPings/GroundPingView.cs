@@ -54,6 +54,7 @@ public class GroundPingView : IPluginUIView, IDisposable
     private const float PING_WHEEL_SIZE = 310;
     private const float PING_WHEEL_CENTER_SIZE_MULTIPLIER = 0.141f;
 
+    private bool IsAnyPingEnabled => this.configuration.EnableGroundPings || this.configuration.EnableGuiPings;
     private bool IsQuickPingKeybindDown => this.keyStateWrapper.IsVirtualKeyValid(this.configuration.QuickPingKeybind) &&
         this.keyStateWrapper.GetRawValue(this.configuration.QuickPingKeybind) > 0;
     private bool CreatePingOnLeftMouseUp => pingLeftClickPosition.HasValue;
@@ -100,7 +101,7 @@ public class GroundPingView : IPluginUIView, IDisposable
 
         this.keyStateWrapper.OnKeyDown += key =>
         {
-            if (key == this.configuration.PingKeybind)
+            if (key == this.configuration.PingKeybind && this.IsAnyPingEnabled)
             {
                 cursorIsPing = true;
             }
@@ -112,7 +113,8 @@ public class GroundPingView : IPluginUIView, IDisposable
 
         this.inputEventSource.SubscribeToKeyDown(args =>
         {
-            if (args.Key == WindowsInput.Events.KeyCode.LButton && (IsQuickPingKeybindDown || cursorIsPing))
+            if (this.IsAnyPingEnabled &&
+                args.Key == WindowsInput.Events.KeyCode.LButton && (IsQuickPingKeybindDown || cursorIsPing))
             {
                 if (ImGui.IsWindowHovered(ImGuiHoveredFlags.AnyWindow))
                 {
@@ -233,19 +235,19 @@ public class GroundPingView : IPluginUIView, IDisposable
             this.presenter.Value.GroundPings.Clear();
         }
 
-        if (cursorIsPing)
+        unsafe
         {
-            ImGui.SetMouseCursor(ImGuiMouseCursor.None);
-            unsafe
+            if (cursorIsPing)
             {
+                ImGui.SetMouseCursor(ImGuiMouseCursor.None);
                 AtkStage.Instance()->AtkCursor.Hide();
+                DrawPingCursor(ImGui.GetForegroundDrawList(), ImGui.GetMousePos(), 50 * Vector2.One);
             }
-            DrawPingCursor(ImGui.GetForegroundDrawList(), ImGui.GetMousePos(), 50 * Vector2.One);
-        }
-        else if (IsQuickPingKeybindDown)
-        {
-            var position = ImGui.GetMousePos() + new Vector2(14, 30);
-            DrawPingCursor(ImGui.GetForegroundDrawList(), position, 25 * Vector2.One);
+            else if (this.IsAnyPingEnabled && IsQuickPingKeybindDown)
+            {
+                var position = ImGui.GetMousePos() + new Vector2(14, 30);
+                DrawPingCursor(ImGui.GetForegroundDrawList(), position, 25 * Vector2.One);
+            }
         }
 
         leftMouseUpThisFrame = false;

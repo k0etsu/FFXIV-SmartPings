@@ -17,6 +17,8 @@ public struct HudElementInfo
 
     public string? OwnerName;
     public bool IsOnSelf;
+    public bool IsOnPartyMember;
+    public bool IsOnHostile;
 }
 
 public struct GaugeValue

@@ -2,6 +2,7 @@
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin;
 using NLog;
+using SmartPings.Data;
 using System;
 
 namespace SmartPings
@@ -29,6 +30,7 @@ namespace SmartPings
         public bool EnableHpMpPings { get; set; } = true;
         public bool SendGuiPingsToCustomServer { get; set; } = true;
         public bool SendGuiPingsToXivChat { get; set; }
+        public XivChatSendLocation XivChatSendLocation { get; set; } = XivChatSendLocation.Active;
 
         public float MasterVolume { get; set; } = 2.0f;
 

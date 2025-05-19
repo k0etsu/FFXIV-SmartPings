@@ -4,6 +4,7 @@ using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using ECommons.Automation;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -61,6 +62,28 @@ public unsafe class GuiPingHandler
         this.logger = logger;
     }
 
+    public static string GetLocalPlayerName()
+    {
+        // Accessing IClientState in a non-framework thread will crash XivAlexander, so this is a
+        // different way of getting the local player name
+        if (0 < AgentHUD.Instance()->PartyMemberCount)
+        {
+            return AgentHUD.Instance()->PartyMembers[0].Name.ExtractText();
+        }
+        return string.Empty;
+    }
+
+    public static uint GetLocalPlayerId()
+    {
+        // Accessing IClientState in a non-framework thread will crash XivAlexander, so this is a
+        // different way of getting the local player id
+        if (0 < AgentHUD.Instance()->PartyMemberCount)
+        {
+            return AgentHUD.Instance()->PartyMembers[0].EntityId;
+        }
+        return default;
+    }
+
     public bool TryPingUi()
     {
         var collisionNode = AtkStage.Instance()->AtkCollisionManager->IntersectingCollisionNode;
@@ -88,7 +111,7 @@ public unsafe class GuiPingHandler
             // Target name -------------
             if (!info.IsOnSelf)
             {
-                echoMsg.AddUiForeground($"{info.OwnerName}: ", LIGHT_BLUE);
+                echoMsg.AddUiForeground($"{info.OwnerName}: ", info.IsOnHostile ? RED : LIGHT_BLUE);
 
                 chatMsg.Append($"{info.OwnerName}: ");
             }
@@ -115,14 +138,15 @@ public unsafe class GuiPingHandler
                     echoMsg.Append(SeIconChar.Buff.ToIconString());
                     echoMsg.AddUiForegroundOff();
                 }
-                echoMsg.AddUiForeground($"{info.Status.Name}", info.Status.IsEnfeeblement ? RED : YELLOW);
+                var beneficial = info.IsOnHostile == info.Status.IsEnfeeblement;
+                echoMsg.AddUiForeground($"{info.Status.Name}", beneficial ? YELLOW : RED);
                 echoMsg.Append([RawPayload.LinkTerminator]);
 
                 chatMsg.Append("<status>");
 
                 if (info.Status.MaxStacks > 0)
                 {
-                    echoMsg.AddUiForeground($" x{info.Status.Stacks}", info.Status.IsEnfeeblement ? RED : YELLOW);
+                    echoMsg.AddUiForeground($" x{info.Status.Stacks}", beneficial ? YELLOW : RED);
 
                     chatMsg.Append($" x{info.Status.Stacks}");
                 }
@@ -142,22 +166,40 @@ public unsafe class GuiPingHandler
             else if (info.ElementType == HudElementInfo.Type.Hp)
             {
                 var hpPercent = (float)info.Hp.Value / info.Hp.MaxValue * 100;
-                var hpString = hpPercent < 1 ? hpPercent.ToString("F1") : hpPercent.ToString("F0");
+                hpPercent = MathF.Floor(hpPercent * 10) / 10;
+                var hpString = hpPercent == 100 ? hpPercent.ToString("F0") : hpPercent.ToString("F1");
+                if (hpString == "0.0" && hpPercent > 0) { hpString = "0.1"; }
                 echoMsg.AddUiForeground($"HP: {hpString}%", hpPercent < 10 ? RED : YELLOW);
-                echoMsg.AddUiForeground($" ({info.Hp.Value}/{info.Hp.MaxValue})", GREEN);
+                if (info.IsOnPartyMember || info.IsOnSelf)
+                {
+                    echoMsg.AddUiForeground($" ({info.Hp.Value:N0}/{info.Hp.MaxValue:N0})", GREEN);
+                }
 
-                chatMsg.Append($"HP: {hpString}% ({info.Hp.Value}/{info.Hp.MaxValue})");
+                chatMsg.Append($"HP: {hpString}%");
+                if (info.IsOnPartyMember || info.IsOnSelf)
+                {
+                    chatMsg.Append($" ({info.Hp.Value:N0}/{info.Hp.MaxValue:N0})");
+                }
 
                 ImGuiExtensions.CaptureMouseThisFrame();
             }
             else if (info.ElementType == HudElementInfo.Type.Mp)
             {
                 var mpPercent = (float)info.Mp.Value / info.Mp.MaxValue * 100;
-                var mpString = mpPercent < 1 ? mpPercent.ToString("F1") : mpPercent.ToString("F0");
+                mpPercent = MathF.Floor(mpPercent * 10) / 10;
+                var mpString = mpPercent == 100 ? mpPercent.ToString("F0") : mpPercent.ToString("F1");
+                if (mpString == "0.0" && mpPercent > 0) { mpString = "0.1"; }
                 echoMsg.AddUiForeground($"MP: {mpString}%", mpPercent < 10 ? RED : YELLOW);
-                echoMsg.AddUiForeground($" ({info.Mp.Value}/{info.Mp.MaxValue})", GREEN);
+                if (info.IsOnPartyMember || info.IsOnSelf)
+                {
+                    echoMsg.AddUiForeground($" ({info.Mp.Value:N0}/{info.Mp.MaxValue:N0})", GREEN);
+                }
 
-                chatMsg.Append($"MP: {mpString}% ({info.Mp.Value}/{info.Mp.MaxValue})");
+                chatMsg.Append($"MP: {mpString}%");
+                if (info.IsOnPartyMember || info.IsOnSelf)
+                {
+                    chatMsg.Append($" ({info.Mp.Value:N0}/{info.Mp.MaxValue:N0})");
+                }
 
                 ImGuiExtensions.CaptureMouseThisFrame();
             }
@@ -170,6 +212,10 @@ public unsafe class GuiPingHandler
                     if (info.ElementType == HudElementInfo.Type.Status)
                     {
                         AgentChatLog.Instance()->ContextStatusId = info.Status.Id;
+                    }
+                    if (this.configuration.XivChatSendLocation == XivChatSendLocation.Party)
+                    {
+                        chatMsg.Insert(0, "/party ");
                     }
                     this.chat.SendMessage(chatMsg.ToString());
                 });
@@ -189,28 +235,6 @@ public unsafe class GuiPingHandler
         }
 
         return true;
-    }
-
-    private string GetLocalPlayerName()
-    {
-        // Accessing IClientState in a non-framework thread will crash XivAlexander, so this is a
-        // different way of getting the local player name
-        if (0 < AgentHUD.Instance()->PartyMemberCount)
-        {
-            return AgentHUD.Instance()->PartyMembers[0].Name.ExtractText();
-        }
-        return string.Empty;
-    }
-
-    private uint GetLocalPlayerId()
-    {
-        // Accessing IClientState in a non-framework thread will crash XivAlexander, so this is a
-        // different way of getting the local player id
-        if (0 < AgentHUD.Instance()->PartyMemberCount)
-        {
-            return AgentHUD.Instance()->PartyMembers[0].EntityId;
-        }
-        return default;
     }
 
     // To determine what status was clicked on, we need to go from AtkImageNode (inherits AtkCollisionNode) to Status information.
@@ -250,6 +274,7 @@ public unsafe class GuiPingHandler
                         info.ElementType = HudElementInfo.Type.Status;
                         info.OwnerName = character.Name.ExtractText();
                         info.IsOnSelf = true;
+                        info.IsOnPartyMember = true;
                         return true;
                     }
                 }
@@ -265,6 +290,7 @@ public unsafe class GuiPingHandler
                         info.ElementType = HudElementInfo.Type.Status;
                         info.OwnerName = character.Name.ExtractText();
                         info.IsOnSelf = true;
+                        info.IsOnPartyMember = true;
                         return true;
                     }
                 }
@@ -280,6 +306,7 @@ public unsafe class GuiPingHandler
                         info.ElementType = HudElementInfo.Type.Status;
                         info.OwnerName = character.Name.ExtractText();
                         info.IsOnSelf = true;
+                        info.IsOnPartyMember = true;
                         return true;
                     }
                 }
@@ -295,6 +322,7 @@ public unsafe class GuiPingHandler
                         info.ElementType = HudElementInfo.Type.Status;
                         info.OwnerName = character.Name.ExtractText();
                         info.IsOnSelf = true;
+                        info.IsOnPartyMember = true;
                         return true;
                     }
                 }
@@ -320,6 +348,7 @@ public unsafe class GuiPingHandler
                             info.ElementType = HudElementInfo.Type.Status;
                             info.OwnerName = partyMember.Name.ExtractText();
                             info.IsOnSelf = partyMemberIndex == 0;
+                            info.IsOnPartyMember = true;
                             return true;
                         }
                     }
@@ -344,27 +373,67 @@ public unsafe class GuiPingHandler
                         var partyMember = AgentHUD.Instance()->PartyMembers[partyMemberIndex];
                         var mousePosition = new Vector2(UIInputData.Instance()->CursorInputs.PositionX, UIInputData.Instance()->CursorInputs.PositionY);
                         // Check for HP node
-                        var element = new XivHudNodeMap.HudElement() { HudSection = XivHudNodeMap.HudSection.PartyList1Hp + partyMemberIndex };
+                        var element = new XivHudNodeMap.HudElement(XivHudNodeMap.HudSection.PartyList1Hp + partyMemberIndex);
                         if (this.hudNodeMap.TryGetHudElementNode(element, out var hpNode) &&
                             IsPositionInNode(mousePosition, (AtkResNode*)hpNode))
                         {
                             info.ElementType = HudElementInfo.Type.Hp;
                             info.OwnerName = partyMember.Name.ExtractText();
                             info.IsOnSelf = partyMemberIndex == 0;
+                            info.IsOnPartyMember = true;
                             info.Hp.Value = partyMember.Object->Health;
                             info.Hp.MaxValue = partyMember.Object->MaxHealth;
                             return true;
                         }
                         // Check for MP node
-                        element = new XivHudNodeMap.HudElement() { HudSection = XivHudNodeMap.HudSection.PartyList1Mp + partyMemberIndex };
+                        element = new XivHudNodeMap.HudElement(XivHudNodeMap.HudSection.PartyList1Mp + partyMemberIndex);
                         if (this.hudNodeMap.TryGetHudElementNode(element, out var mpNode) &&
                             IsPositionInNode(mousePosition, (AtkResNode*)mpNode))
                         {
                             info.ElementType = HudElementInfo.Type.Mp;
                             info.OwnerName = partyMember.Name.ExtractText();
                             info.IsOnSelf = partyMemberIndex == 0;
+                            info.IsOnPartyMember = true;
                             info.Mp.Value = partyMember.Object->Mana;
                             info.Mp.MaxValue = partyMember.Object->MaxMana;
+                            return true;
+                        }
+                    }
+                }
+                break;
+
+            case XivHudNodeMap.HudSection.TargetHp:
+                {
+                    var targetId = AgentHUD.Instance()->CurrentTargetId;
+                    var target = CharacterManager.Instance()->LookupBattleCharaByEntityId(targetId);
+                    if (target != null)
+                    {
+                        info.ElementType = HudElementInfo.Type.Hp;
+                        info.OwnerName = target->NameString;
+                        info.IsOnSelf = targetId == GetLocalPlayerId();
+                        info.IsOnPartyMember = target->IsPartyMember;
+                        info.IsOnHostile = target->IsHostile;
+                        info.Hp.Value = target->Health;
+                        info.Hp.MaxValue = target->MaxHealth;
+                        return true;
+                    }
+                }
+                break;
+
+            case XivHudNodeMap.HudSection.TargetStatus:
+                {
+                    var targetId = AgentHUD.Instance()->CurrentTargetId;
+                    var target = CharacterManager.Instance()->LookupBattleCharaByEntityId(targetId);
+                    if (target != null)
+                    {
+                        var statuses = target->StatusManager.Status;
+                        if (TryGetStatus(statuses, StatusType.TargetStatus, hudElement.Index, out info.Status))
+                        {
+                            info.ElementType = HudElementInfo.Type.Status;
+                            info.OwnerName = target->NameString;
+                            info.IsOnSelf = targetId == GetLocalPlayerId();
+                            info.IsOnPartyMember = target->IsPartyMember;
+                            info.IsOnHostile = target->IsHostile;
                             return true;
                         }
                     }
@@ -403,6 +472,8 @@ public unsafe class GuiPingHandler
                 Stacks = s.Param,
             };
 
+            if (!statusInfo.IsVisible) { continue; }
+
             // Intentionally putting switch inside foreach instead of outside for code clarity
             switch (type)
             {
@@ -438,20 +509,32 @@ public unsafe class GuiPingHandler
                     // Other statuses are not displayed in the party list
                     if (statusInfo.IsOther) { continue; }
                     break;
+
+                case StatusType.TargetStatus:
+                    break;
             }
 
             statusInfo.RemainingTime = s.RemainingTime;
             this.statuses.Add(statusInfo);
         }
 
-        var sortedStatuses = this.statuses.OrderByDescending(s => s.PartyListPriority);
-        if (isOwnEnhancementsPrioritized && type == StatusType.SelfEnhancement)
+        IOrderedEnumerable<Status> sortedStatuses;
+        if (type == StatusType.TargetStatus)
         {
-            sortedStatuses = sortedStatuses.ThenByDescending(s => s.SourceIsSelf);
+            sortedStatuses = this.statuses.OrderByDescending(s => s.SourceIsSelf)
+                .ThenByDescending(s => s.PartyListPriority);
         }
-        if (isOthersEnhancementsDisplayedInOthers && type == StatusType.SelfOther)
+        else
         {
-            sortedStatuses = sortedStatuses.ThenBy(s => s.IsOther);
+            sortedStatuses = this.statuses.OrderByDescending(s => s.PartyListPriority);
+            if (isOwnEnhancementsPrioritized && type == StatusType.SelfEnhancement)
+            {
+                sortedStatuses = sortedStatuses.ThenByDescending(s => s.SourceIsSelf);
+            }
+            if (isOthersEnhancementsDisplayedInOthers && type == StatusType.SelfOther)
+            {
+                sortedStatuses = sortedStatuses.ThenBy(s => s.IsOther);
+            }
         }
 
         var i = 0;

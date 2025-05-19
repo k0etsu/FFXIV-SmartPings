@@ -1,6 +1,7 @@
 ﻿using AsyncAwaitBestPractices;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Newtonsoft.Json;
 using Reactive.Bindings;
@@ -77,6 +78,8 @@ public class MainWindowPresenter(
             b => { this.configuration.SendGuiPingsToCustomServer = b; this.configuration.Save(); }, this.configuration.SendGuiPingsToCustomServer);
         Bind(this.view.SendGuiPingsToXivChat,
             b => { this.configuration.SendGuiPingsToXivChat = b; this.configuration.Save(); }, this.configuration.SendGuiPingsToXivChat);
+        Bind(this.view.XivChatSendLocation,
+            b => { this.configuration.XivChatSendLocation = b; this.configuration.Save(); }, this.configuration.XivChatSendLocation);
 
         Bind(this.view.MasterVolume,
             f => { this.configuration.MasterVolume = f; this.configuration.Save(); }, this.configuration.MasterVolume);
@@ -145,7 +148,21 @@ public class MainWindowPresenter(
             this.configuration.Save();
         });
 
-        this.view.PrintStatuses.Subscribe(_ =>
+        this.view.PrintNodeMap1.Subscribe(_ =>
+        {
+            foreach (var n in this.hudNodeMap.CollisionNodeMap)
+            {
+                this.logger.Info("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
+            }
+        });
+        this.view.PrintNodeMap2.Subscribe(_ =>
+        {
+            foreach (var n in this.hudNodeMap.ElementNodeMap)
+            {
+                this.logger.Info("HudSection {0} -> {1}", n.Key.HudSection, n.Value.ToString("X"));
+            }
+        });
+        this.view.PrintPartyStatuses.Subscribe(_ =>
         {
             unsafe
             {
@@ -166,6 +183,7 @@ public class MainWindowPresenter(
                         {
                             status = new Status(luminaStatus)
                             {
+                                SourceIsSelf = characterStatus.SourceId == GuiPingHandler.GetLocalPlayerId(),
                                 Stacks = characterStatus.Param,
                             };
                         }
@@ -175,18 +193,35 @@ public class MainWindowPresenter(
                 }
             }
         });
-        this.view.PrintNodeMap1.Subscribe(_ =>
+        this.view.PrintTargetStatuses.Subscribe(_ =>
         {
-            foreach (var n in this.hudNodeMap.CollisionNodeMap)
+            unsafe
             {
-                this.logger.Info("Node {0} -> {1}:{2}", n.Key.ToString("X"), n.Value.HudSection, n.Value.Index);
-            }
-        });
-        this.view.PrintNodeMap2.Subscribe(_ =>
-        {
-            foreach (var n in this.hudNodeMap.ElementNodeMap)
-            {
-                this.logger.Info("HudSection {0} -> {1}", n.Key.HudSection, n.Value.ToString("X"));
+                var targetId = AgentHUD.Instance()->CurrentTargetId;
+                var target = CharacterManager.Instance()->LookupBattleCharaByEntityId(targetId);
+                if (target != null)
+                {
+                    this.logger.Info("Target id {0}, name {1}", targetId, target->NameString);
+                    foreach(var targetStatus in target->StatusManager.Status)
+                    {
+                        if (targetStatus.StatusId == 0) { continue; }
+                        var luminaStatuses = this.dataManager.GetExcelSheet<Lumina.Excel.Sheets.Status>(this.clientState.ClientLanguage);
+                        Status status = new() { Id = targetStatus.StatusId };
+                        if (luminaStatuses.TryGetRow(targetStatus.StatusId, out var luminaStatus))
+                        {
+                            status = new Status(luminaStatus)
+                            {
+                                SourceIsSelf = targetStatus.SourceId == GuiPingHandler.GetLocalPlayerId(),
+                                Stacks = targetStatus.Param,
+                            };
+                        }
+                        this.logger.Info("Target has status {0}", JsonConvert.SerializeObject(status).ToString());
+                    }
+                }
+                else
+                {
+                    this.logger.Info("No target.");
+                }
             }
         });
     }

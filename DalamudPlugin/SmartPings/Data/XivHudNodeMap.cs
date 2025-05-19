@@ -2,7 +2,6 @@
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using SmartPings.Log;
-using System;
 using System.Collections.Generic;
 
 namespace SmartPings.Data;
@@ -20,7 +19,9 @@ public unsafe class XivHudNodeMap
         StatusConditionalEnhancements = 4,
 
         TargetStatus = 10,
-        ForcusTargetStatus = 11,
+        TargetHp = 11,
+        FocusTargetStatus = 15,
+        FocusTargetHp = 16,
 
         PartyList1Status = 21,
         PartyList2Status = 22,
@@ -64,10 +65,10 @@ public unsafe class XivHudNodeMap
         PartyList9Mp = 59,
     }
 
-    public struct HudElement
+    public struct HudElement(HudSection hudSection, uint index = default)
     {
-        public HudSection HudSection;
-        public uint Index; // 0-indexed
+        public HudSection HudSection = hudSection;
+        public uint Index = index; // 0-indexed
     }
 
     public IReadOnlyDictionary<nint, HudElement> CollisionNodeMap => this.collisionNodeMap;
@@ -85,6 +86,8 @@ public unsafe class XivHudNodeMap
     private bool otherLoaded;
     private bool conditionalEnhancementsLoaded;
     private bool partyListLoaded;
+    private bool targetHpLoaded;
+    private bool targetStatusLoaded;
 
     public XivHudNodeMap(
         IGameGui gameGui,
@@ -99,7 +102,7 @@ public unsafe class XivHudNodeMap
         // Enhancements
         if (!this.enhancementsLoaded)
         {
-            var statusEnhancements = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom0");
+            var statusEnhancements = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom0");
             if (statusEnhancements == null)
             {
                 this.logger.Error("Could not load _StatusCustom0 addon.");
@@ -110,12 +113,8 @@ public unsafe class XivHudNodeMap
             {
                 var componentNode = statusEnhancements->GetComponentByNodeId(i);
                 if (componentNode == null || componentNode->AtkResNode == null) { continue; }
-                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
-                {
-                    HudSection = HudSection.StatusEnhancements,
-                    Index = i - 2,
-                });
-
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode,
+                    new(HudSection.StatusEnhancements, i - 2));
             }
             this.enhancementsLoaded = true;
         }
@@ -123,7 +122,7 @@ public unsafe class XivHudNodeMap
         // Enfeeblements
         if (!this.enfeeblementsLoaded)
         {
-            var statusEnfeeblements = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom1");
+            var statusEnfeeblements = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom1");
             if (statusEnfeeblements == null)
             {
                 this.logger.Error("Could not load _StatusCustom1 addon.");
@@ -134,11 +133,8 @@ public unsafe class XivHudNodeMap
             {
                 var componentNode = statusEnfeeblements->GetComponentByNodeId(i);
                 if (componentNode == null || componentNode->AtkResNode == null) { continue; }
-                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
-                {
-                    HudSection = HudSection.StatusEnfeeblements,
-                    Index = i - 2,
-                });
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode,
+                    new(HudSection.StatusEnfeeblements, i - 2));
             }
             this.enfeeblementsLoaded = true;
         }
@@ -146,7 +142,7 @@ public unsafe class XivHudNodeMap
         // Other
         if (!this.otherLoaded)
         {
-            var statusOther = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom2");
+            var statusOther = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom2");
             if (statusOther == null)
             {
                 this.logger.Error("Could not load _StatusCustom2 addon.");
@@ -157,11 +153,8 @@ public unsafe class XivHudNodeMap
             {
                 var componentNode = statusOther->GetComponentByNodeId(i);
                 if (componentNode == null || componentNode->AtkResNode == null) { continue; }
-                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
-                {
-                    HudSection = HudSection.StatusOther,
-                    Index = i - 2,
-                });
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode,
+                    new(HudSection.StatusOther, i - 2));
             }
             this.otherLoaded = true;
         }
@@ -169,7 +162,7 @@ public unsafe class XivHudNodeMap
         // Conditional Enhancements
         if (!this.conditionalEnhancementsLoaded)
         {
-            var statusConditionalEnhancements = (AtkUnitBase*)gameGui.GetAddonByName("_StatusCustom3");
+            var statusConditionalEnhancements = (AtkUnitBase*)this.gameGui.GetAddonByName("_StatusCustom3");
             if (statusConditionalEnhancements == null)
             {
                 this.logger.Error("Could not load _StatusCustom3 addon.");
@@ -180,17 +173,14 @@ public unsafe class XivHudNodeMap
             {
                 var componentNode = statusConditionalEnhancements->GetComponentByNodeId(i);
                 if (componentNode == null || componentNode->AtkResNode == null) { continue; }
-                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode, new()
-                {
-                    HudSection = HudSection.StatusConditionalEnhancements,
-                    Index = i - 2,
-                });
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode,
+                    new(HudSection.StatusConditionalEnhancements, i - 2));
             }
             this.conditionalEnhancementsLoaded = true;
         }
 
         // Party List
-        var partyList = (AddonPartyList*)gameGui.GetAddonByName("_PartyList");
+        var partyList = (AddonPartyList*)this.gameGui.GetAddonByName("_PartyList");
         if (partyList == null)
         {
             this.logger.Error("Could not load _PartyList addon.");
@@ -214,11 +204,8 @@ public unsafe class XivHudNodeMap
                 if (statusIconNode->AtkResNode != null)
                 {
                     var nodePtr = (nint)statusIconNode->AtkResNode;
-                    this.collisionNodeMap.TryAdd(nodePtr, new()
-                    {
-                        HudSection = HudSection.PartyList1Status + i,
-                        Index = j,
-                    });
+                    this.collisionNodeMap.TryAdd(nodePtr,
+                        new(HudSection.PartyList1Status + i, j));
                     this.partyListStatusNodes.Add(nodePtr);
                 }
                 var ownerNode = statusIconNode->OwnerNode;
@@ -234,30 +221,64 @@ public unsafe class XivHudNodeMap
                 var partyCollisionNode = partyMember.PartyMemberComponent->UldManager.RootNode;
                 if (partyCollisionNode != null)
                 {
-                    this.collisionNodeMap.TryAdd((nint)partyCollisionNode, new()
-                    {
-                        HudSection = HudSection.PartyList1CollisionNode + i,
-                    });
+                    this.collisionNodeMap.TryAdd((nint)partyCollisionNode,
+                        new(HudSection.PartyList1CollisionNode + i));
                 }
                 if (partyMember.HPGaugeBar != null && partyMember.HPGaugeBar->OwnerNode != null)
                 {
-                    this.elementNodeMap.TryAdd(new()
-                    {
-                        HudSection = HudSection.PartyList1Hp + i,
-                    },
+                    this.elementNodeMap.TryAdd(new(HudSection.PartyList1Hp + i),
                     (nint)partyMember.HPGaugeBar->OwnerNode);
                 }
                 if (partyMember.MPGaugeBar != null && partyMember.MPGaugeBar->OwnerNode != null)
                 {
-                    this.elementNodeMap.TryAdd(new()
-                    {
-                        HudSection = HudSection.PartyList1Mp + i,
-                    },
+                    this.elementNodeMap.TryAdd(new(HudSection.PartyList1Mp + i),
                     (nint)partyMember.MPGaugeBar->OwnerNode);
                 }
             }
         }
         this.partyListLoaded = true;
+
+        // Target HP
+        if (!this.targetHpLoaded)
+        {
+            var targetInfoMainTarget = (AtkUnitBase*)this.gameGui.GetAddonByName("_TargetInfoMainTarget");
+            if (targetInfoMainTarget == null)
+            {
+                this.logger.Error("Could not load _TargetInfoMainTarget addon.");
+                Unload();
+                return;
+            }
+            var targetHpCollisionNode = targetInfoMainTarget->GetNodeById(17);
+            if (targetHpCollisionNode == null)
+            {
+                this.logger.Error("Could not load Target HP collision node.");
+                Unload();
+                return;
+            }
+            this.collisionNodeMap.TryAdd((nint)targetHpCollisionNode,
+                new(HudSection.TargetHp));
+            this.targetHpLoaded = true;
+        }
+
+        // Target Statuses
+        if (!this.targetStatusLoaded)
+        {
+            var targetInfoBuffDebuff = (AtkUnitBase*)this.gameGui.GetAddonByName("_TargetInfoBuffDebuff");
+            if (targetInfoBuffDebuff == null)
+            {
+                this.logger.Error("Could not load _TargetInfoBuffDebuff addon.");
+                Unload();
+                return;
+            }
+            for (uint i = 3; i <= 32; i++)
+            {
+                var componentNode = targetInfoBuffDebuff->GetComponentByNodeId(i);
+                if (componentNode == null || componentNode->AtkResNode == null) { continue; }
+                this.collisionNodeMap.TryAdd((nint)componentNode->AtkResNode,
+                    new(HudSection.TargetStatus, i - 3));
+            }
+            this.targetStatusLoaded = true;
+        }
     }
 
     public void Unload()

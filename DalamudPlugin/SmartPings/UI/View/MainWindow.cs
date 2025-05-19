@@ -6,6 +6,7 @@ using Dalamud.Plugin.Services;
 using ImGuiNET;
 using Reactive.Bindings;
 using SmartPings.Audio;
+using SmartPings.Data;
 using SmartPings.Extensions;
 using SmartPings.Input;
 using SmartPings.Log;
@@ -52,13 +53,16 @@ public class MainWindow : Window, IPluginUIView, IDisposable
     public IReactiveProperty<bool> EnableHpMpPings { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<bool> SendGuiPingsToCustomServer { get; } = new ReactiveProperty<bool>();
     public IReactiveProperty<bool> SendGuiPingsToXivChat { get; } = new ReactiveProperty<bool>();
+    public IReactiveProperty<XivChatSendLocation> XivChatSendLocation { get; } = new ReactiveProperty<XivChatSendLocation>();
 
-    public IObservable<Unit> PrintStatuses => printStatuses.AsObservable();
-    private readonly Subject<Unit> printStatuses = new();
     public IObservable<Unit> PrintNodeMap1 => printNodeMap1.AsObservable();
     private readonly Subject<Unit> printNodeMap1 = new();
     public IObservable<Unit> PrintNodeMap2 => printNodeMap2.AsObservable();
     private readonly Subject<Unit> printNodeMap2 = new();
+    public IObservable<Unit> PrintPartyStatuses => printPartyStatuses.AsObservable();
+    private readonly Subject<Unit> printPartyStatuses = new();
+    public IObservable<Unit> PrintTargetStatuses => printTargetStatuses.AsObservable();
+    private readonly Subject<Unit> printTargetStatuses = new();
 
     public IReactiveProperty<float> MasterVolume { get; } = new ReactiveProperty<float>();
 
@@ -76,6 +80,7 @@ public class MainWindow : Window, IPluginUIView, IDisposable
     private readonly IClientState clientState;
 
     private readonly string[] groundPingTypes;
+    private readonly string[] xivChatSendLocations;
     private readonly string[] falloffTypes;
     private readonly string[] allLoggingLevels;
 
@@ -102,6 +107,7 @@ public class MainWindow : Window, IPluginUIView, IDisposable
         this.configuration = configuration;
         this.clientState = clientState;
         this.groundPingTypes = Enum.GetNames<GroundPing.Type>();
+        this.xivChatSendLocations = Enum.GetNames<XivChatSendLocation>();
         this.falloffTypes = Enum.GetNames<AudioFalloffModel.FalloffType>();
         this.allLoggingLevels = [.. LogLevel.AllLoggingLevels.Select(l => l.Name)];
         windowSystem.AddWindow(this);
@@ -428,10 +434,13 @@ public class MainWindow : Window, IPluginUIView, IDisposable
             }
             ImGui.SameLine(); Common.HelpMarker("More ping types coming soon™");
 
-            var defaultGroundPingType = (int)this.DefaultGroundPingType.Value;
-            if (ImGui.Combo("Default Ping", ref defaultGroundPingType, this.groundPingTypes, this.groundPingTypes.Length))
+            using (ImRaii.ItemWidth(100))
             {
-                this.DefaultGroundPingType.Value = (GroundPing.Type)defaultGroundPingType;
+                var defaultGroundPingType = (int)this.DefaultGroundPingType.Value;
+                if (ImGui.Combo("Default Ping", ref defaultGroundPingType, this.groundPingTypes, this.groundPingTypes.Length))
+                {
+                    this.DefaultGroundPingType.Value = (GroundPing.Type)defaultGroundPingType;
+                }
             }
         }
 
@@ -442,7 +451,6 @@ public class MainWindow : Window, IPluginUIView, IDisposable
         {
             this.EnableGuiPings.Value = enableGuiPings;
         }
-        ImGui.SameLine(); Common.HelpMarker("Target statuses not yet supported");
 
         using (ImRaii.PushIndent())
         using (ImRaii.Disabled(!this.EnableGuiPings.Value))
@@ -477,17 +485,23 @@ public class MainWindow : Window, IPluginUIView, IDisposable
             {
                 ImGui.SetTooltip("Sending messages in game chat may be traceable as plugin usage. Use with caution!");
             }
+
+            using (ImRaii.PushIndent())
+            using (ImRaii.Disabled(!this.SendGuiPingsToXivChat.Value))
+            using (ImRaii.ItemWidth(100))
+            {
+                var xivChatSendLocation = (int)this.XivChatSendLocation.Value;
+                if (ImGui.Combo("Send Chat To", ref xivChatSendLocation, this.xivChatSendLocations, this.xivChatSendLocations.Length))
+                {
+                    this.XivChatSendLocation.Value = (XivChatSendLocation)xivChatSendLocation;
+                }
+            }
         }
 
 #if DEBUG
         ImGui.Dummy(new Vector2(0.0f, 5.0f)); // ---------------
 
         ImGui.Text("DEBUG");
-        if (ImGui.Button("Print Statuses"))
-        {
-            this.printStatuses.OnNext(Unit.Default);
-        }
-        ImGui.SameLine();
         if (ImGui.Button("Print Node Map 1"))
         {
             this.printNodeMap1.OnNext(Unit.Default);
@@ -496,6 +510,16 @@ public class MainWindow : Window, IPluginUIView, IDisposable
         if (ImGui.Button("Print Node Map 2"))
         {
             this.printNodeMap2.OnNext(Unit.Default);
+        }
+
+        if (ImGui.Button("Print Party Statuses"))
+        {
+            this.printPartyStatuses.OnNext(Unit.Default);
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Print Target Statuses"))
+        {
+            this.printTargetStatuses.OnNext(Unit.Default);
         }
 #endif
     }

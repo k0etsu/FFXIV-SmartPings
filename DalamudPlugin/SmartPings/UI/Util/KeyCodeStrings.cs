@@ -66,6 +66,8 @@ public class KeyCodeStrings
     {
         switch(key)
         {
+            case VirtualKey.NO_KEY:
+                return "Not set";
             case VirtualKey.MENU:
                 return "ALT";
             default:

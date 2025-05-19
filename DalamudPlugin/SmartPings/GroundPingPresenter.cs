@@ -1,8 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using SmartPings.Network;
+﻿using SmartPings.Network;
 using SmartPings.UI.Presenter;
 using SmartPings.UI.View;
+using System;
+using System.Collections.Generic;
 
 namespace SmartPings;
 

@@ -16,7 +16,7 @@ public struct Status
     public byte StatusCategory;
     public byte PartyListPriority;
     public byte CanIncreaseRewards;
-    //public byte ParamEffect;
+    public byte ParamEffect;
     //public byte TargetType;
     //public byte Flags;
     //public byte Flag2;
@@ -42,6 +42,9 @@ public struct Status
     public readonly bool IsEnfeeblement => StatusCategory == 2;
     public readonly bool IsOther => StatusCategory == 1 && CanIncreaseRewards == 1;
     public readonly bool IsConditionalEnhancement => StatusCategory == 1 && CanIncreaseRewards == 2;
+    // Some statuses are invisible and are in the status list but are not shown in any UI
+    // Class-based damage buff in Criterion (31)
+    public readonly bool IsVisible => ParamEffect != 31;
 
     public Status(Lumina.Excel.Sheets.Status luminaStatus)
     {
@@ -57,7 +60,7 @@ public struct Status
         StatusCategory = luminaStatus.StatusCategory;
         PartyListPriority = luminaStatus.PartyListPriority;
         CanIncreaseRewards = luminaStatus.CanIncreaseRewards;
-        //ParamEffect = luminaStatus.ParamEffect;
+        ParamEffect = luminaStatus.ParamEffect;
         //TargetType = luminaStatus.TargetType;
         //Flags = luminaStatus.Flags;
         //Flag2 = luminaStatus.Flag2;
@@ -73,7 +76,7 @@ public struct Status
         //IsPermanent = luminaStatus.IsPermanent;
         //CanStatusOff = luminaStatus.CanStatusOff;
         //IsFcBuff = luminaStatus.IsFcBuff;
-        //Invisibility = luminaStatus.Invisibility,
+        //Invisibility = luminaStatus.Invisibility;
     }
 }
 
@@ -87,4 +90,5 @@ public enum StatusType
     SelfConditionalEnhancement = 4,
 
     PartyListStatus = 10,
+    TargetStatus = 11,
 }
