@@ -7,7 +7,8 @@ This plugin adds networked ground and UI pings to FFXIV as a Dalamud plugin.
 ## Features
 
 ### Ground pings
-![](images/ground_ping.gif)
+![](images/ground_pings.gif)
+
 *More ping types will be added later*
 
 ### Networked pings
@@ -41,6 +42,11 @@ This adds plugins from this repo as installable plugins in the available plugins
 Default ping keybinds are `G` then left click to execute a ping, or hold `Control` then left click to execute a quick ping.
 
 Keybinds are adjustable in the plugin config settings, which can be opened by typing either `/smartpings` or `/sp` into the chat.
+
+To send and receive pings from other players, join either a public or private room.<br />
+A public room will automatically match you with players in your map, while private rooms are password protected and keeps your room between map changes.
+
+UI pings are sent through echo chat by default, but can be configured to send through in-game chat, such as party chat. However, use this feature with caution, as in-game chat logs are recorded by Square Enix.
 
 ## Contributing
 Please use the support discord for idea and code contribution discussion.
