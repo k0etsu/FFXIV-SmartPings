@@ -8,14 +8,15 @@ This plugin adds networked ground and UI pings to FFXIV as a Dalamud plugin.
 
 ### Ground pings
 ![](images/ground_ping.gif)
+*More ping types will be added later*
 
 ### Networked pings
 ![](images/networked_pings.gif)
 
 ### UI Pings
-![] (images/ui_pings.gif)
+![](images/ui_pings.gif)
 
-#### Support discord
+## Support discord
 
 [![Discord Banner](https://discord.com/api/guilds/669688899248979968/widget.png?style=banner2)](https://discord.gg/rSucAJ6A7u)
 
@@ -34,6 +35,12 @@ This adds plugins from this repo as installable plugins in the available plugins
 
 - Enter `/xlplugins` in the chat window and go to the **All Plugins** tab in the opened window.
 - Search for the **SmartPings** plugin and click **install**.
+
+## Usage
+
+Default ping keybinds are `G` then left click to execute a ping, or hold `Control` then left click to execute a quick ping.
+
+Keybinds are adjustable in the plugin config settings, which can be opened by typing either `/smartpings` or `/sp` into the chat.
 
 ## Contributing
 Please use the support discord for idea and code contribution discussion.
