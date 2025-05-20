@@ -142,6 +142,8 @@ public class MainWindowPresenter(
                     this.configuration.PingKeybind = default; break;
                 case Keybind.QuickPing:
                     this.configuration.QuickPingKeybind = default; break;
+                case Keybind.QuickerPing:
+                    this.configuration.QuickerPingKeybind = default; break;
                 default:
                     return;
             }
@@ -256,6 +258,8 @@ public class MainWindowPresenter(
                     this.configuration.PingKeybind = key; break;
                 case Keybind.QuickPing:
                     this.configuration.QuickPingKeybind = key; break;
+                case Keybind.QuickerPing:
+                    this.configuration.QuickerPingKeybind = key; break;
                 default:
                     return;
             }

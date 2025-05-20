@@ -149,6 +149,33 @@ public class GroundPingView : IPluginUIView, IDisposable
                 leftMouseUpThisFrame = true;
             }
         });
+
+        this.keyStateWrapper.OnKeyUp += key =>
+        {
+            // this.logger.Debug(this.configuration.QuickerPingKeybind + " " + key.ToString());
+            if (key == this.configuration.QuickerPingKeybind && IsAnyPingEnabled)
+            {
+                if (ImGui.IsWindowHovered(ImGuiHoveredFlags.AnyWindow))
+                {
+                    return;
+                }
+
+                if (uiPingHandler.TryPingUi())
+                {
+                    return;
+                }
+
+                if (!this.configuration.EnableGroundPings) { return; }
+
+                ImGuiExtensions.CaptureMouseThisFrame();
+                pingLeftClickPosition = ImGui.GetMousePos();
+                pingLeftClickHeldDuration = 0;
+                pingWheelActive = false;
+
+                cursorIsPing = false;
+                leftMouseUpThisFrame = true;
+            }
+        };
     }
 
     public void Dispose()
